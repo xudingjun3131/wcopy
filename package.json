@@ -1,0 +1,58 @@
+{
+  "name": "wcopy",
+  "version": "1.0.0",
+  "description": "A Windows clipboard history manager inspired by iCopy",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "clipboard",
+    "windows",
+    "electron",
+    "icopy"
+  ],
+  "author": "wcopy team",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.wcopy.app",
+    "productName": "wcopy",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "msi"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "wcopy",
+      "artifactName": "wcopy-setup-${version}.${ext}"
+    },
+    "msi": {
+      "oneClick": false,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "wcopy",
+      "artifactName": "wcopy-${version}.${ext}"
+    }
+  }
+}
