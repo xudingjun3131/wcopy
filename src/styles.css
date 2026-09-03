@@ -621,6 +621,38 @@ body {
   accent-color: var(--accent);
 }
 
+.shortcut-display {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 96px;
+  text-align: right;
+}
+
+.btn-record {
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--card-bg);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.btn-record:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-record.recording {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* Switch */
 .switch {
   position: relative;

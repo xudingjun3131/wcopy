@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('wcopyAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (patch) => ipcRenderer.invoke('set-settings', patch),
+  capturePopupShortcut: (active) => ipcRenderer.invoke('popup-shortcut-capture', active),
 
   // Window
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),

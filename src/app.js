@@ -139,7 +139,11 @@ const setTheme = document.getElementById('setTheme');
 const setRetainFav = document.getElementById('setRetainFav');
 const clearAllBtn = document.getElementById('clearAllBtn');
 const appVersionText = document.getElementById('appVersionText');
-let settings = { launchAtLogin: false, maxItems: 200, theme: 'light', clearRetainsFavorites: true };
+const recordShortcutBtn = document.getElementById('recordShortcutBtn');
+const popupShortcutText = document.getElementById('popupShortcutText');
+const shortcutHint = document.getElementById('shortcutHint');
+let isCapturingShortcut = false;
+let settings = { launchAtLogin: false, maxItems: 200, theme: 'light', clearRetainsFavorites: true, popupShortcut: 'CommandOrControl+Shift+V' };
 
 function formatRelativeTime(timestamp) {
   const diff = Date.now() - timestamp;
@@ -365,6 +369,129 @@ async function loadHistory() {
   }
 }
 
+function displayAccel(accel) {
+  return (accel || '').replace('CommandOrControl', 'Ctrl');
+}
+
+async function loadSettings() {
+  if (isElectron && window.wcopyAPI.getSettings) {
+    try {
+      const s = await window.wcopyAPI.getSettings();
+      settings = { ...settings, ...s };
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  }
+  applySettingsToUI();
+}
+
+function applySettingsToUI() {
+  if (setLaunchAtLogin) setLaunchAtLogin.checked = !!settings.launchAtLogin;
+  if (setMaxItems) {
+    setMaxItems.value = settings.maxItems || 200;
+    setMaxItemsVal.textContent = settings.maxItems || 200;
+  }
+  if (setTheme) setTheme.value = settings.theme === 'dark' ? 'dark' : 'light';
+  if (setRetainFav) setRetainFav.checked = settings.clearRetainsFavorites !== false;
+  if (popupShortcutText) popupShortcutText.textContent = displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V');
+  if (shortcutHint) shortcutHint.textContent = `${displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V')} 唤起 · Enter 粘贴`;
+  if (appVersionText && isElectron && window.wcopyAPI.getVersion) {
+    window.wcopyAPI.getVersion().then(v => { appVersionText.textContent = 'wcopy ' + v; }).catch(() => {});
+  }
+}
+
+async function saveSettings(patch) {
+  if (isElectron && window.wcopyAPI.setSettings) {
+    try {
+      const updated = await window.wcopyAPI.setSettings(patch);
+      settings = { ...settings, ...updated };
+      if (patch.popupShortcut && updated.popupShortcut !== patch.popupShortcut) {
+        if (popupShortcutText) popupShortcutText.textContent = displayAccel(updated.popupShortcut);
+        statusText.textContent = '该快捷键无效或已被占用，已还原';
+        setTimeout(() => statusText.textContent = '就绪', 2500);
+      }
+      return updated;
+    } catch (err) {
+      console.error('saveSettings error:', err);
+    }
+  }
+  settings = { ...settings, ...patch };
+  return settings;
+}
+
+function startShortcutCapture() {
+  if (isCapturingShortcut) return;
+  isCapturingShortcut = true;
+  if (recordShortcutBtn) {
+    recordShortcutBtn.textContent = '按下快捷键…';
+    recordShortcutBtn.classList.add('recording');
+  }
+  if (isElectron && window.wcopyAPI.capturePopupShortcut) {
+    window.wcopyAPI.capturePopupShortcut(true);
+  }
+  window.addEventListener('keydown', onShortcutCaptureKey, true);
+}
+
+function onShortcutCaptureKey(e) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (e.key === 'Escape') {
+    finishShortcutCapture(false);
+    return;
+  }
+
+  const modifiers = [];
+  if (e.ctrlKey) modifiers.push('Ctrl');
+  if (e.altKey) modifiers.push('Alt');
+  if (e.shiftKey) modifiers.push('Shift');
+  if (e.metaKey) modifiers.push('CommandOrControl');
+
+  let key = '';
+  if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
+  else if (/^Digit[0-9]$/.test(e.code)) key = e.code.slice(5);
+  else if (/^F[0-9]{1,2}$/.test(e.code)) key = e.code;
+  else {
+    const map = {
+      Space: 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+      Enter: 'Enter', Backspace: 'Backspace', Delete: 'Delete', Tab: 'Tab', Insert: 'Insert',
+      Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown'
+    };
+    if (map[e.code]) key = map[e.code];
+    else if (e.key && e.key.length === 1) key = e.key.toUpperCase();
+  }
+
+  if (modifiers.length === 0) {
+    statusText.textContent = '请同时按住 Ctrl / Alt / Shift';
+    setTimeout(() => statusText.textContent = '就绪', 2000);
+    finishShortcutCapture(false);
+    return;
+  }
+  if (!key) return; // 仅按下修饰键，继续等待主按键
+
+  finishShortcutCapture(true, modifiers.join('+') + '+' + key);
+}
+
+async function finishShortcutCapture(commit, accel) {
+  window.removeEventListener('keydown', onShortcutCaptureKey, true);
+  isCapturingShortcut = false;
+  if (recordShortcutBtn) {
+    recordShortcutBtn.textContent = '录制';
+    recordShortcutBtn.classList.remove('recording');
+  }
+  if (isElectron && window.wcopyAPI.capturePopupShortcut) {
+    window.wcopyAPI.capturePopupShortcut(false);
+  }
+  if (commit && accel) {
+    const updated = await saveSettings({ popupShortcut: accel });
+    const shown = displayAccel(updated.popupShortcut || accel);
+    if (popupShortcutText) popupShortcutText.textContent = shown;
+    if (shortcutHint) shortcutHint.textContent = `${shown} 唤起 · Enter 粘贴`;
+    statusText.textContent = `弹窗快捷键已设为 ${shown}`;
+    setTimeout(() => statusText.textContent = '就绪', 2000);
+  }
+}
+
 async function copyItem(item) {
   if (isElectron && window.wcopyAPI.writeItem) {
     await window.wcopyAPI.writeItem(item.id);
@@ -467,6 +594,65 @@ closeBtn.addEventListener('click', () => {
     window.wcopyAPI.closeWindow();
   }
 });
+
+// Settings panel wiring
+if (settingsBtn && settingsOverlay) {
+  settingsBtn.addEventListener('click', () => { settingsOverlay.style.display = 'flex'; });
+}
+if (settingsClose) {
+  settingsClose.addEventListener('click', () => { settingsOverlay.style.display = 'none'; });
+}
+if (settingsOverlay) {
+  settingsOverlay.addEventListener('click', (e) => {
+    if (e.target === settingsOverlay) settingsOverlay.style.display = 'none';
+  });
+}
+
+if (setLaunchAtLogin) {
+  setLaunchAtLogin.addEventListener('change', async () => {
+    await saveSettings({ launchAtLogin: setLaunchAtLogin.checked });
+  });
+}
+
+if (setMaxItems) {
+  setMaxItems.addEventListener('input', () => {
+    setMaxItemsVal.textContent = setMaxItems.value;
+  });
+  setMaxItems.addEventListener('change', async () => {
+    await saveSettings({ maxItems: parseInt(setMaxItems.value, 10) });
+  });
+}
+
+if (setTheme) {
+  setTheme.addEventListener('change', async () => {
+    await saveSettings({ theme: setTheme.value });
+    currentTheme = setTheme.value === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('wcopy-theme', currentTheme);
+  });
+}
+
+if (setRetainFav) {
+  setRetainFav.addEventListener('change', async () => {
+    await saveSettings({ clearRetainsFavorites: setRetainFav.checked });
+  });
+}
+
+if (clearAllBtn) {
+  clearAllBtn.addEventListener('click', async () => {
+    if (isElectron && window.wcopyAPI.clearHistory) {
+      await window.wcopyAPI.clearHistory();
+      history = [];
+      render();
+      statusText.textContent = '已清除全部历史';
+      setTimeout(() => statusText.textContent = '就绪', 1500);
+    }
+  });
+}
+
+if (recordShortcutBtn) {
+  recordShortcutBtn.addEventListener('click', startShortcutCapture);
+}
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {

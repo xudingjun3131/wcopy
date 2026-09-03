@@ -10,6 +10,7 @@ let store = null;
 let settings = null;
 let watcherId = null;
 let lastHash = '';
+let popupAccel = 'CommandOrControl+Shift+V';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -347,9 +348,32 @@ function toggleWindow() {
 }
 
 function registerShortcuts() {
-  globalShortcut.register('CommandOrControl+Shift+V', () => {
-    toggleWindow();
-  });
+  if (popupAccel) {
+    globalShortcut.register(popupAccel, () => toggleWindow());
+  }
+}
+
+// 重新注册弹窗快捷键（设置变更时调用）。返回是否注册成功。
+function applyPopupShortcut(accel) {
+  if (popupAccel) {
+    try { globalShortcut.unregister(popupAccel); } catch (e) { /* ignore */ }
+  }
+  popupAccel = accel;
+  if (!accel) return true;
+  return globalShortcut.register(accel, () => toggleWindow());
+}
+
+function applyLoginItem() {
+  if (!app.setLoginItemSettings) return;
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!settings.get().launchAtLogin,
+      path: process.execPath,
+      args: []
+    });
+  } catch (err) {
+    console.error('applyLoginItem error:', err);
+  }
 }
 
 async function writeItemToClipboard(id) {
@@ -393,12 +417,30 @@ ipcMain.handle('set-settings', (event, patch) => {
   const updated = settings.set(patch || {});
   if (patch && typeof patch.launchAtLogin === 'boolean') applyLoginItem();
   if (patch && patch.maxItems) store.maxItems = patch.maxItems;
+  if (patch && patch.popupShortcut) {
+    const ok = applyPopupShortcut(patch.popupShortcut);
+    if (!ok) {
+      // 注册失败（快捷键无效或已被占用），回退到原值
+      settings.set({ popupShortcut: popupAccel });
+      updated.popupShortcut = popupAccel;
+    }
+  }
   return updated;
+});
+// 录制弹窗快捷键时临时停用全局快捷键，避免冲突触发
+ipcMain.handle('popup-shortcut-capture', (event, active) => {
+  if (active) {
+    if (popupAccel) { try { globalShortcut.unregister(popupAccel); } catch (e) {} }
+  } else {
+    if (popupAccel) globalShortcut.register(popupAccel, () => toggleWindow());
+  }
 });
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 app.whenReady().then(() => {
   store = new ClipboardStore(app.getPath('userData'), { maxItems: 200 });
+  settings = new SettingsStore(app.getPath('userData'));
+  popupAccel = settings.get().popupShortcut || 'CommandOrControl+Shift+V';
   createWindow();
   createTray();
   registerShortcuts();

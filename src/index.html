@@ -94,7 +94,7 @@
     <!-- 底部状态栏 -->
     <div class="statusbar" data-page-node-id="7OBCmmlVcthpV2jc3Co6yA">
       <span id="statusText" data-page-node-id="ad7BWNkLDvXEHPnSUkLSNE">就绪</span>
-      <span class="shortcut-hint" data-page-node-id="NGy8SBizyhXLFsLNllhFNL">Ctrl+Shift+V 唤起 · Enter 粘贴</span>
+      <span class="shortcut-hint" id="shortcutHint" data-page-node-id="NGy8SBizyhXLFsLNllhFNL">Ctrl+Shift+V 唤起 · Enter 粘贴</span>
     </div>
   </div>
 
@@ -136,6 +136,16 @@
               <option value="light">浅色</option>
               <option value="dark">深色</option>
             </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>弹窗快捷键</span>
+            <small>全局唤起 wcopy 的快捷键（点击录制后按下组合键）</small>
+          </div>
+          <div class="setting-control">
+            <span id="popupShortcutText" class="setting-val shortcut-display">Ctrl+Shift+V</span>
+            <button class="btn-record" id="recordShortcutBtn">录制</button>
           </div>
         </div>
         <div class="setting-row">

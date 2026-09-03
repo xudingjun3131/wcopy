@@ -5,7 +5,8 @@ const DEFAULTS = {
   launchAtLogin: false,
   maxItems: 200,
   theme: 'light',
-  clearRetainsFavorites: true
+  clearRetainsFavorites: true,
+  popupShortcut: 'CommandOrControl+Shift+V'
 };
 
 class SettingsStore {
