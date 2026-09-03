@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { ClipboardStore } = require('./store');
@@ -291,6 +291,7 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
+    positionWindow();
     mainWindow.show();
   });
 }
@@ -334,6 +335,41 @@ function formatTrayLabel(item) {
   return label || '(空)';
 }
 
+function positionWindow() {
+  if (!mainWindow) return;
+  const pos = (settings && settings.get().popupPosition) || 'right';
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const area = display.workArea;
+  const b = mainWindow.getBounds();
+  const centerX = area.x + Math.round((area.width - b.width) / 2);
+  const centerY = area.y + Math.round((area.height - b.height) / 2);
+  let nx = b.x;
+  let ny = b.y;
+  switch (pos) {
+    case 'left':
+      nx = area.x;
+      ny = centerY;
+      break;
+    case 'top':
+      nx = centerX;
+      ny = area.y;
+      break;
+    case 'bottom':
+      nx = centerX;
+      ny = area.y + area.height - b.height;
+      break;
+    case 'right':
+    default:
+      nx = area.x + area.width - b.width;
+      ny = centerY;
+      break;
+  }
+  // 防止窗口大于可用区域时越界，回退到区域内左上角
+  nx = Math.max(area.x, Math.min(nx, area.x + Math.max(0, area.width - b.width)));
+  ny = Math.max(area.y, Math.min(ny, area.y + Math.max(0, area.height - b.height)));
+  mainWindow.setBounds({ x: nx, y: ny, width: b.width, height: b.height });
+}
+
 function toggleWindow() {
   if (!mainWindow) {
     createWindow();
@@ -342,6 +378,7 @@ function toggleWindow() {
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
+    positionWindow();
     mainWindow.show();
     mainWindow.focus();
   }
@@ -416,7 +453,13 @@ ipcMain.handle('get-settings', () => settings ? settings.get() : {});
 ipcMain.handle('set-settings', (event, patch) => {
   const updated = settings.set(patch || {});
   if (patch && typeof patch.launchAtLogin === 'boolean') applyLoginItem();
-  if (patch && patch.maxItems) store.maxItems = patch.maxItems;
+  if (patch && patch.maxItems) {
+    store.maxItems = patch.maxItems;
+    store.enforceMaxItems();
+  }
+  if (patch && patch.popupPosition && mainWindow && mainWindow.isVisible()) {
+    positionWindow();
+  }
   if (patch && patch.popupShortcut) {
     const ok = applyPopupShortcut(patch.popupShortcut);
     if (!ok) {
@@ -438,9 +481,11 @@ ipcMain.handle('popup-shortcut-capture', (event, active) => {
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 app.whenReady().then(() => {
-  store = new ClipboardStore(app.getPath('userData'), { maxItems: 200 });
   settings = new SettingsStore(app.getPath('userData'));
+  const initialMaxItems = settings.get().maxItems || 200;
+  store = new ClipboardStore(app.getPath('userData'), { maxItems: initialMaxItems });
   popupAccel = settings.get().popupShortcut || 'CommandOrControl+Shift+V';
+  applyLoginItem();
   createWindow();
   createTray();
   registerShortcuts();

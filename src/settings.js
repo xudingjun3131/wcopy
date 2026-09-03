@@ -6,6 +6,7 @@ const DEFAULTS = {
   maxItems: 200,
   theme: 'light',
   clearRetainsFavorites: true,
+  popupPosition: 'right',
   popupShortcut: 'CommandOrControl+Shift+V'
 };
 

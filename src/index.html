@@ -118,8 +118,8 @@
         </div>
         <div class="setting-row">
           <div class="setting-label">
-            <span>最大历史条数</span>
-            <small>超出后自动清理最早的非收藏记录</small>
+            <span>保留条数（最大历史条数）</span>
+            <small>超出后自动清理最早的非收藏记录，重启后仍生效</small>
           </div>
           <div class="setting-control">
             <input type="range" id="setMaxItems" min="50" max="1000" step="50">
@@ -135,6 +135,20 @@
             <select id="setTheme">
               <option value="light">浅色</option>
               <option value="dark">深色</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>弹窗弹出方向</span>
+            <small>紧贴对应屏幕边缘显示</small>
+          </div>
+          <div class="setting-control">
+            <select id="setPopupPosition">
+              <option value="left">左侧</option>
+              <option value="right">右侧</option>
+              <option value="top">顶部</option>
+              <option value="bottom">底部</option>
             </select>
           </div>
         </div>

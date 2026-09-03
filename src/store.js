@@ -97,6 +97,17 @@ class ClipboardStore {
     this.history = this.history.filter(i => i.favorite || i.pinned);
     this.save();
   }
+
+  enforceMaxItems() {
+    // 设置保留条数后，立即裁剪超出部分（仅删除未收藏且未置顶的最旧记录）
+    while (this.history.length > this.maxItems) {
+      const removable = this.history.filter(i => !i.favorite && !i.pinned);
+      if (removable.length === 0) break; // 剩余全是收藏/置顶，无法再删
+      const oldest = removable[removable.length - 1];
+      this.history = this.history.filter(i => i.id !== oldest.id);
+    }
+    this.save();
+  }
 }
 
 module.exports = { ClipboardStore };

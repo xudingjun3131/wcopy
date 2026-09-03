@@ -136,6 +136,7 @@ const setLaunchAtLogin = document.getElementById('setLaunchAtLogin');
 const setMaxItems = document.getElementById('setMaxItems');
 const setMaxItemsVal = document.getElementById('setMaxItemsVal');
 const setTheme = document.getElementById('setTheme');
+const setPopupPosition = document.getElementById('setPopupPosition');
 const setRetainFav = document.getElementById('setRetainFav');
 const clearAllBtn = document.getElementById('clearAllBtn');
 const appVersionText = document.getElementById('appVersionText');
@@ -392,6 +393,7 @@ function applySettingsToUI() {
     setMaxItemsVal.textContent = settings.maxItems || 200;
   }
   if (setTheme) setTheme.value = settings.theme === 'dark' ? 'dark' : 'light';
+  if (setPopupPosition) setPopupPosition.value = settings.popupPosition || 'right';
   if (setRetainFav) setRetainFav.checked = settings.clearRetainsFavorites !== false;
   if (popupShortcutText) popupShortcutText.textContent = displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V');
   if (shortcutHint) shortcutHint.textContent = `${displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V')} 唤起 · Enter 粘贴`;
@@ -635,6 +637,12 @@ if (setTheme) {
 if (setRetainFav) {
   setRetainFav.addEventListener('change', async () => {
     await saveSettings({ clearRetainsFavorites: setRetainFav.checked });
+  });
+}
+
+if (setPopupPosition) {
+  setPopupPosition.addEventListener('change', async () => {
+    await saveSettings({ popupPosition: setPopupPosition.value });
   });
 }
 
