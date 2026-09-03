@@ -121,6 +121,13 @@ npm run build:win
 - [x] 文件类型回写完整支持（CF_HDROP）
 - [ ] 历史记录加密/隐私模式
 
+## 用户数据 / 升级保留
+
+- 历史记录保存在当前用户的 `AppData`（Electron `userData`）目录下（`history.json` / `settings.json`），**与安装目录（Program Files）分离**。
+- 因此覆盖安装、升级版本、甚至重装系统后只要用户配置目录还在，历史剪切板数据都不会丢。
+- 安装包已显式设置 `deleteAppDataOnUninstall: false`，**卸载时也不会删除用户历史数据**（如需彻底清理，请手动删除该目录）。
+- 注意：`perMachine` 安装是面向「所有用户」的，每位 Windows 用户有各自独立的历史记录，互不共享。
+
 ## 许可证
 
 本项目采用 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)（署名-非商业性使用 4.0 国际）许可证。

@@ -41,6 +41,7 @@
     "nsis": {
       "oneClick": false,
       "perMachine": true,
+      "deleteAppDataOnUninstall": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
@@ -50,6 +51,7 @@
     "msi": {
       "oneClick": false,
       "perMachine": true,
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "wcopy",
