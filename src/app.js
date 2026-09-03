@@ -416,7 +416,7 @@ function applySettingsToUI() {
   applyDockLayout();
   if (setRetainFav) setRetainFav.checked = settings.clearRetainsFavorites !== false;
   if (popupShortcutText) popupShortcutText.textContent = displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V');
-  if (shortcutHint) shortcutHint.textContent = `${displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V')} 唤起 · Enter 粘贴`;
+  if (shortcutHint) shortcutHint.textContent = `${displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V')} 唤起 · 双击粘贴`;
   if (appVersionText && isElectron && window.wcopyAPI.getVersion) {
     window.wcopyAPI.getVersion().then(v => { appVersionText.textContent = 'wcopy ' + v; }).catch(() => {});
   }
@@ -508,7 +508,7 @@ async function finishShortcutCapture(commit, accel) {
     const updated = await saveSettings({ popupShortcut: accel });
     const shown = displayAccel(updated.popupShortcut || accel);
     if (popupShortcutText) popupShortcutText.textContent = shown;
-    if (shortcutHint) shortcutHint.textContent = `${shown} 唤起 · Enter 粘贴`;
+    if (shortcutHint) shortcutHint.textContent = `${shown} 唤起 · 双击粘贴`;
     statusText.textContent = `弹窗快捷键已设为 ${shown}`;
     setTimeout(() => statusText.textContent = '', 2000);
   }
@@ -745,7 +745,7 @@ document.addEventListener('keydown', (e) => {
     selectCard(activeIndex);
   } else if (e.key === 'Enter' && activeIndex >= 0) {
     e.preventDefault();
-    pasteItem(items[activeIndex]);
+    copyItem(items[activeIndex]);
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'd' && activeIndex >= 0) {
     e.preventDefault();
     deleteItem(items[activeIndex].id);

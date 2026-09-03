@@ -1,6 +1,6 @@
 const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
-const { exec, execFile } = require('child_process');
+const { exec, execFile, execFileSync } = require('child_process');
 const { ClipboardStore } = require('./store');
 const { SettingsStore } = require('./settings');
 
@@ -12,6 +12,24 @@ let watcherId = null;
 let lastHash = '';
 let popupAccel = 'CommandOrControl+Shift+V';
 let opening = false; // 防止快捷键连发重复唤起
+let targetHwnd = null; // 唤起弹窗时记录的前台窗口句柄（粘贴时用于把焦点还给原应用）
+
+// 同步获取当前前台窗口句柄（仅 Windows）。必须在快捷键回调里、弹窗显示之前调用，
+// 此时用户原应用（如记事本）仍是前台，句柄才准确。点击弹窗后 wcopy 会成为前台，
+// 那时再取就变成 wcopy 自己了，所以这里提前记录。
+function captureTargetHwnd() {
+  if (process.platform !== 'win32') { targetHwnd = null; return; }
+  try {
+    const out = execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      'Add-Type @\"using System;using System.Runtime.InteropServices;public class GW{[DllImport(\"user32.dll\")]public static extern IntPtr GetForegroundWindow();}\"@; [GW]::GetForegroundWindow().ToString()'
+    ], { timeout: 1000, windowsHide: true });
+    const s = out.toString().trim();
+    targetHwnd = /^\d+$/.test(s) ? s : null;
+  } catch (e) {
+    targetHwnd = null;
+  }
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -405,7 +423,7 @@ function toggleWindow() {
 
 function registerShortcuts() {
   if (popupAccel) {
-    globalShortcut.register(popupAccel, () => toggleWindow());
+    globalShortcut.register(popupAccel, () => { captureTargetHwnd(); toggleWindow(); });
   }
 }
 
@@ -416,7 +434,7 @@ function applyPopupShortcut(accel) {
   }
   popupAccel = accel;
   if (!accel) return true;
-  return globalShortcut.register(accel, () => toggleWindow());
+  return globalShortcut.register(accel, () => { captureTargetHwnd(); toggleWindow(); });
 }
 
 function applyLoginItem() {
@@ -470,21 +488,61 @@ ipcMain.handle('toggle-pin', (event, id) => { store.togglePin(id); notifyHistory
 ipcMain.handle('clear-history', () => { store.clear(); notifyHistoryUpdated(); });
 ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
 
-// 复制并粘贴：写入剪贴板 -> 隐藏弹窗 -> 向当前前台应用发送 Ctrl+V（仅 Windows）
-// 关键：弹窗已用 showInactive() 显示，原应用（记事本等）仍保持前台；隐藏弹窗后焦点自然回退，
-// 此时直接发 Ctrl+V 就能可靠粘贴到原应用，避免 SetForegroundWindow 的“前台锁”问题。
+// 复制并粘贴：写入剪贴板 ->（Windows）把焦点强制还给唤起前记录的原应用再发 Ctrl+V -> 关闭弹窗
+// 关键：用户点击弹窗后 wcopy 会成为前台，原应用（记事本）失去焦点。所以粘贴时必须显式把焦点
+// 还给原应用，否则 Ctrl+V 会发到 wcopy 自己。Windows 的 SetForegroundWindow 有“前台锁”限制，
+// 后台进程直接调用会被拒绝；用 AttachThreadInput 把 PowerShell 线程附着到当前前台线程（拥有前台
+// 权限）后，SetForegroundWindow 才能可靠把焦点还给原应用，再发 Ctrl+V。
+const PASTE_PS_TEMPLATE = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class W32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+}
+"@
+$hwnd = [IntPtr]::Parse("__HWND__")
+$fore = [W32]::GetForegroundWindow()
+$foreThread = [W32]::GetWindowThreadProcessId($fore, [ref][uint32]0)
+$self = [W32]::GetCurrentThreadId()
+[W32]::AttachThreadInput($foreThread, $self, $true)
+if ([W32]::IsIconic($hwnd)) { [W32]::ShowWindow($hwnd, 9) }   # SW_RESTORE
+[W32]::SetForegroundWindow($hwnd)
+[W32]::AttachThreadInput($foreThread, $self, $false)
+Start-Sleep -Milliseconds 60
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait("^v")
+`;
 ipcMain.handle('paste-item', async (event, id) => {
   const ok = await writeItemToClipboard(id);
   if (!ok) return false;
   if (process.platform === 'win32') {
-    // 先隐藏弹窗：Windows 会把焦点退回唤起前的应用；再给它一点稳定时间，然后发 Ctrl+V
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
-    setTimeout(() => {
-      const ps = 'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("^v")';
+    const hwnd = targetHwnd;
+    if (hwnd && hwnd !== '0') {
+      // 把焦点还给原应用（如记事本），再发 Ctrl+V，最后隐藏弹窗
+      const ps = PASTE_PS_TEMPLATE.replace('__HWND__', hwnd);
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
         if (err) console.error('paste-item SendKeys failed:', err);
       });
-    }, 150);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        setTimeout(() => mainWindow.hide(), 200);
+      }
+    } else {
+      // 未记录到原窗口句柄：隐藏弹窗让焦点回退，再兜底发 Ctrl+V 到当前前台
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+      setTimeout(() => {
+        const ps = 'Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 40; [System.Windows.Forms.SendKeys]::SendWait("^v")';
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
+          if (err) console.error('paste-item SendKeys failed:', err);
+        });
+      }, 120);
+    }
   } else {
     // 非 Windows：写入剪贴板后仅复制，然后关闭弹窗
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
