@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('wcopyAPI', {
   togglePin: (id) => ipcRenderer.invoke('toggle-pin', id),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
   writeItem: (id) => ipcRenderer.invoke('write-item', id),
+  // 复制并粘贴到当前应用（写入剪贴板后向刚失焦的窗口发送 Ctrl+V）
+  pasteItem: (id) => ipcRenderer.invoke('paste-item', id),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),

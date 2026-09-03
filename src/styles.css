@@ -303,6 +303,12 @@ body {
   overflow-x: hidden;
 }
 
+/* 左右贴边：卡片不压缩，超出部分走竖向滚动（否则会被 flex 压扁且不出现滚动条） */
+[data-dock="left"] .card,
+[data-dock="right"] .card {
+  flex-shrink: 0;
+}
+
 /* 上下贴边：横向整行，左右滚动（胶片条） */
 [data-dock="top"] .card-grid,
 [data-dock="bottom"] .card-grid {
@@ -406,7 +412,7 @@ body {
 .card-body {
   flex: 1;
   padding: 0 14px 10px;
-  min-height: 80px;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -463,6 +469,7 @@ body {
   padding: 10px 14px 12px;
   border-top: 1px solid var(--border);
   margin-top: auto;
+  flex-shrink: 0;
 }
 
 .card-size {

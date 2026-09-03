@@ -1,6 +1,6 @@
 const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { ClipboardStore } = require('./store');
 const { SettingsStore } = require('./settings');
 
@@ -461,6 +461,24 @@ ipcMain.handle('toggle-favorite', (event, id) => { store.toggleFavorite(id); not
 ipcMain.handle('toggle-pin', (event, id) => { store.togglePin(id); notifyHistoryUpdated(); });
 ipcMain.handle('clear-history', () => { store.clear(); notifyHistoryUpdated(); });
 ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
+// 复制并粘贴：写入剪贴板 -> 隐藏窗口 -> 向刚才失焦的应用发送 Ctrl+V（仅 Windows）
+ipcMain.handle('paste-item', async (event, id) => {
+  const ok = writeItemToClipboard(id);
+  if (!ok) return false;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.hide();
+  }
+  if (process.platform === 'win32') {
+    // 等窗口真正让出焦点，再把 Ctrl+V 发给之前获得焦点的应用
+    setTimeout(() => {
+      const ps = "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')";
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
+        if (err) console.error('paste-item SendKeys failed:', err);
+      });
+    }, 180);
+  }
+  return true;
+});
 ipcMain.handle('window-minimize', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.hide(); });
 ipcMain.handle('get-settings', () => settings ? settings.get() : {});

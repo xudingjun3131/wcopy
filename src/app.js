@@ -265,6 +265,12 @@ function createCard(item, index) {
     selectCard(index);
   });
 
+  card.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.action-btn')) return;
+    e.preventDefault();
+    pasteItem(item);
+  });
+
   const copyBtn = card.querySelector('.action-btn.copy');
   const favoriteBtn = card.querySelector('.action-btn.favorite');
   const pinBtn = card.querySelector('.action-btn.pin');
@@ -521,6 +527,15 @@ async function copyItem(item) {
   }
 }
 
+// 复制并粘贴：写入剪贴板后向当前应用发送 Ctrl+V（主进程处理粘贴）
+async function pasteItem(item) {
+  if (isElectron && window.wcopyAPI.pasteItem) {
+    await window.wcopyAPI.pasteItem(item.id);
+  } else {
+    await copyItem(item);
+  }
+}
+
 async function toggleFavorite(id) {
   if (isElectron && window.wcopyAPI.toggleFavorite) {
     await window.wcopyAPI.toggleFavorite(id);
@@ -716,6 +731,23 @@ document.addEventListener('keydown', (e) => {
     deleteItem(items[activeIndex].id);
   }
 });
+
+// 鼠标滚轮滚动：条目跟随鼠标滚轮沿布局方向卷动
+// - 上下贴边（横行胶片条）：普通鼠标竖向滚轮映射为左右滚动，触控板横向 deltaX 也支持
+// - 左右贴边（竖列）：沿用原生竖向滚动；按住 Shift 时也可横向滚动
+cardGrid.addEventListener('wheel', (e) => {
+  const isRow = document.documentElement.dataset.dock === 'top' || document.documentElement.dataset.dock === 'bottom';
+  if (isRow) {
+    const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (delta !== 0) {
+      e.preventDefault();
+      cardGrid.scrollLeft += delta;
+    }
+  } else if (e.shiftKey && e.deltaY !== 0) {
+    e.preventDefault();
+    cardGrid.scrollLeft += e.deltaY;
+  }
+}, { passive: false });
 
 // Drag region for frameless window
 document.querySelectorAll('.titlebar, .toolbar, .list-header, .statusbar').forEach(el => {
