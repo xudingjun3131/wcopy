@@ -120,3 +120,13 @@ npm run build:win
 - [ ] 多显示器边缘对齐
 - [x] 文件类型回写完整支持（CF_HDROP）
 - [ ] 历史记录加密/隐私模式
+
+## 许可证
+
+本项目采用 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)（署名-非商业性使用 4.0 国际）许可证。
+
+- 允许个人学习、修改、非商业分发。
+- **禁止商用**，如需商用请联系作者获得书面授权。
+- 完整的许可证文本见仓库根目录 [`LICENSE`](./LICENSE)。
+
+`wcopy` 名称及 Logo（敢客 / itgank.com）为相关权利人商标，未经许可不得擅自使用。

@@ -287,12 +287,52 @@ body {
 
 .card-grid {
   flex: 1;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
-  padding: 4px 4px 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
   align-content: start;
+}
+
+/* 左右贴边：竖向整列，上下滚动 */
+[data-dock="left"] .card-grid,
+[data-dock="right"] .card-grid {
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 上下贴边：横向整行，左右滚动（胶片条） */
+[data-dock="top"] .card-grid,
+[data-dock="bottom"] .card-grid {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 12px;
+}
+
+/* 横向模式下卡片固定宽度，铺满整行高度 */
+[data-dock="top"] .card,
+[data-dock="bottom"] .card {
+  flex: 0 0 240px;
+  width: 240px;
+  max-height: 100%;
+}
+
+/* 上下贴边时工具栏更紧凑，给卡片行留出高度 */
+[data-dock="top"] .toolbar,
+[data-dock="bottom"] .toolbar {
+  padding: 10px 16px 6px;
+  gap: 10px;
+}
+
+/* 单行模式下列表视图切换无意义，隐藏 */
+[data-dock="top"] .view-options,
+[data-dock="bottom"] .view-options {
+  display: none;
 }
 
 /* Card */

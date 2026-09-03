@@ -16,7 +16,7 @@
     "icopy"
   ],
   "author": "wcopy team",
-  "license": "MIT",
+  "license": "CC-BY-NC-4.0",
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^26.15.3"

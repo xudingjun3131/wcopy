@@ -339,7 +339,7 @@ function render() {
     emptyState.style.display = 'flex';
     resultCount.textContent = '0 条记录';
   } else {
-    cardGrid.style.display = 'grid';
+    cardGrid.style.display = 'flex';
     emptyState.style.display = 'none';
     resultCount.textContent = `${items.length} 条记录`;
     items.forEach((item, index) => {
@@ -350,9 +350,14 @@ function render() {
 
 function selectCard(index) {
   activeIndex = index;
-  document.querySelectorAll('.card').forEach((c, i) => {
+  const cards = document.querySelectorAll('.card');
+  cards.forEach((c, i) => {
     c.classList.toggle('active', i === index);
   });
+  const active = cards[index];
+  if (active) {
+    active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }
 
 async function loadHistory() {
@@ -386,6 +391,12 @@ async function loadSettings() {
   applySettingsToUI();
 }
 
+// 根据贴边位置设置布局方向：左右=竖列，上下=横行
+function applyDockLayout() {
+  const pos = settings.popupPosition || 'right';
+  document.documentElement.dataset.dock = pos;
+}
+
 function applySettingsToUI() {
   if (setLaunchAtLogin) setLaunchAtLogin.checked = !!settings.launchAtLogin;
   if (setMaxItems) {
@@ -394,6 +405,7 @@ function applySettingsToUI() {
   }
   if (setTheme) setTheme.value = settings.theme === 'dark' ? 'dark' : 'light';
   if (setPopupPosition) setPopupPosition.value = settings.popupPosition || 'right';
+  applyDockLayout();
   if (setRetainFav) setRetainFav.checked = settings.clearRetainsFavorites !== false;
   if (popupShortcutText) popupShortcutText.textContent = displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V');
   if (shortcutHint) shortcutHint.textContent = `${displayAccel(settings.popupShortcut || 'CommandOrControl+Shift+V')} 唤起 · Enter 粘贴`;
@@ -643,6 +655,7 @@ if (setRetainFav) {
 if (setPopupPosition) {
   setPopupPosition.addEventListener('change', async () => {
     await saveSettings({ popupPosition: setPopupPosition.value });
+    applyDockLayout();
   });
 }
 
@@ -684,11 +697,14 @@ document.addEventListener('keydown', (e) => {
 
   if (items.length === 0) return;
 
-  if (e.key === 'ArrowDown') {
+  // 横向贴边（上下）用左右键，竖向贴边（左右）用上下键
+  const isRow = document.documentElement.dataset.dock === 'top' || document.documentElement.dataset.dock === 'bottom';
+
+  if ((e.key === 'ArrowDown' && !isRow) || (e.key === 'ArrowRight' && isRow)) {
     e.preventDefault();
     activeIndex = (activeIndex + 1) % items.length;
     selectCard(activeIndex);
-  } else if (e.key === 'ArrowUp') {
+  } else if ((e.key === 'ArrowUp' && !isRow) || (e.key === 'ArrowLeft' && isRow)) {
     e.preventDefault();
     activeIndex = (activeIndex - 1 + items.length) % items.length;
     selectCard(activeIndex);

@@ -260,8 +260,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 960,
     height: 640,
-    minWidth: 720,
-    minHeight: 480,
+    minWidth: 320,
+    minHeight: 200,
     frame: false,
     titleBarStyle: 'hidden',
     show: false,
@@ -335,39 +335,53 @@ function formatTrayLabel(item) {
   return label || '(空)';
 }
 
+// 贴边弹窗尺寸：左右为竖向整条（满高窄列），上下为横向整条（满宽矮行）
+const DOCK_COLUMN_WIDTH = 380;
+const DOCK_ROW_HEIGHT = 380;
+
 function positionWindow() {
   if (!mainWindow) return;
   const pos = (settings && settings.get().popupPosition) || 'right';
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const area = display.workArea;
-  const b = mainWindow.getBounds();
-  const centerX = area.x + Math.round((area.width - b.width) / 2);
-  const centerY = area.y + Math.round((area.height - b.height) / 2);
-  let nx = b.x;
-  let ny = b.y;
+  let nx, ny, nw, nh;
   switch (pos) {
     case 'left':
+      nw = DOCK_COLUMN_WIDTH;
+      nh = area.height;
       nx = area.x;
-      ny = centerY;
+      ny = area.y;
+      break;
+    case 'right':
+      nw = DOCK_COLUMN_WIDTH;
+      nh = area.height;
+      nx = area.x + area.width - nw;
+      ny = area.y;
       break;
     case 'top':
-      nx = centerX;
+      nw = area.width;
+      nh = DOCK_ROW_HEIGHT;
+      nx = area.x;
       ny = area.y;
       break;
     case 'bottom':
-      nx = centerX;
-      ny = area.y + area.height - b.height;
+      nw = area.width;
+      nh = DOCK_ROW_HEIGHT;
+      nx = area.x;
+      ny = area.y + area.height - nh;
       break;
-    case 'right':
     default:
-      nx = area.x + area.width - b.width;
-      ny = centerY;
-      break;
+      nw = DOCK_COLUMN_WIDTH;
+      nh = area.height;
+      nx = area.x + area.width - nw;
+      ny = area.y;
   }
-  // 防止窗口大于可用区域时越界，回退到区域内左上角
-  nx = Math.max(area.x, Math.min(nx, area.x + Math.max(0, area.width - b.width)));
-  ny = Math.max(area.y, Math.min(ny, area.y + Math.max(0, area.height - b.height)));
-  mainWindow.setBounds({ x: nx, y: ny, width: b.width, height: b.height });
+  // 夹在可用工作区内，避免越界
+  nw = Math.max(320, Math.min(nw, area.width));
+  nh = Math.max(200, Math.min(nh, area.height));
+  nx = Math.max(area.x, Math.min(nx, area.x + area.width - nw));
+  ny = Math.max(area.y, Math.min(ny, area.y + area.height - nh));
+  mainWindow.setBounds({ x: nx, y: ny, width: nw, height: nh });
 }
 
 function toggleWindow() {
