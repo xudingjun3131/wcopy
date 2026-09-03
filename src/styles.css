@@ -88,6 +88,18 @@ body {
   justify-content: flex-end;
 }
 
+.title-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg);
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  margin-right: 2px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
 .titlebar-center {
   font-size: 12px;
   font-weight: 600;
@@ -142,26 +154,26 @@ body {
 
 /* Toolbar */
 .toolbar {
-  padding: 20px 24px 12px;
+  padding: 12px 20px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
 .search-box {
   position: relative;
   width: 100%;
-  max-width: 560px;
-  height: 42px;
+  max-width: 340px;
+  height: 34px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 10px;
   transition: all 0.2s ease;
 }
 
@@ -182,7 +194,7 @@ body {
   outline: none;
   background: transparent;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-family: var(--font);
 }
 
@@ -215,12 +227,12 @@ body {
 
 .tab {
   flex-shrink: 0;
-  padding: 6px 14px;
+  padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--card-bg);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   font-family: var(--font);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -255,10 +267,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 4px;
+  padding: 6px 4px;
   color: var(--text-secondary);
   font-size: 12px;
   flex-shrink: 0;
+}
+
+#statusText {
+  color: var(--accent);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .view-options {
@@ -290,8 +310,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px;
   align-content: start;
 }
 
@@ -316,8 +336,8 @@ body {
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px;
 }
 
 /* 横向模式下卡片固定宽度，铺满整行高度 */
@@ -338,6 +358,12 @@ body {
 /* 单行模式下列表视图切换无意义，隐藏 */
 [data-dock="top"] .view-options,
 [data-dock="bottom"] .view-options {
+  display: none;
+}
+
+/* 左右贴边窗口较窄，隐藏居中标题避免与计数/按钮重叠 */
+[data-dock="left"] .titlebar-center,
+[data-dock="right"] .titlebar-center {
   display: none;
 }
 
@@ -371,7 +397,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 8px;
+  padding: 10px 14px 6px;
 }
 
 .type-tag {
@@ -411,7 +437,7 @@ body {
 
 .card-body {
   flex: 1;
-  padding: 0 14px 10px;
+  padding: 0 14px 8px;
   min-height: 0;
   overflow: hidden;
 }
@@ -466,7 +492,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px 12px;
+  padding: 8px 14px 10px;
   border-top: 1px solid var(--border);
   margin-top: auto;
   flex-shrink: 0;
@@ -541,15 +567,15 @@ body {
 
 /* Status bar */
 .statusbar {
-  height: 32px;
+  height: 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
+  justify-content: flex-start;
+  padding: 0 12px;
   background: var(--card-bg);
   border-top: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
 }
 
