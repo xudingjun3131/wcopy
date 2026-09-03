@@ -32,7 +32,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          npx electron-builder --win --x64 nsis 2>&1 | tee nsis.log
+          npx electron-builder --win --x64 --config.win.target=nsis 2>&1 | tee nsis.log
 
       - name: Build MSI installer (.msi)
         id: msi
@@ -40,7 +40,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          npx electron-builder --win --x64 msi 2>&1 | tee msi.log
+          npx electron-builder --win --x64 --config.win.target=msi 2>&1 | tee msi.log
 
       - name: Stage notes with build logs
         shell: bash
