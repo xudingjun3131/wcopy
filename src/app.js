@@ -527,9 +527,7 @@ async function copyItem(item) {
     ? `已复制（保留格式）：${label.slice(0, 22)}${label.length > 22 ? '...' : ''}`
     : `已复制：${label.slice(0, 30)}${label.length > 30 ? '...' : ''}`;
   setTimeout(() => statusText.textContent = '', 2000);
-  if (isElectron && window.wcopyAPI.closeWindow) {
-    setTimeout(() => window.wcopyAPI.closeWindow(), 200);
-  }
+  // 单复制不关闭弹窗，只有粘贴或手工关闭才关
 }
 
 // 复制并粘贴：写入剪贴板后向当前应用发送 Ctrl+V（主进程处理粘贴）

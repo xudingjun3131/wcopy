@@ -93,28 +93,17 @@ def draw_white_icon(size):
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
+# 注意：任务栏/托盘图标（icon-taskbar.* / tray-icon.png）现在由 gen_logo_icons.py
+# 根据用户提供的“敢客 / itgank.com”Logo 生成（蓝青内容转白）。
+# 本脚本只负责安装包/应用图标（icon.png / icon.ico）。
+
 # app icon
 icon_512 = draw_icon(512)
 icon_512.save(os.path.join(base_dir, 'icon.png'))
-
-# tray icon (white so it shows clearly in the Windows notification area / bottom-right)
-icon_32 = draw_white_icon(32)
-icon_32.save(os.path.join(base_dir, 'tray-icon.png'))
 
 # windows ico with multiple sizes
 ico = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
 images = [draw_icon(s) for s in [16, 24, 32, 48, 64, 128, 256]]
 ico.save(os.path.join(base_dir, 'icon.ico'), format='ICO', sizes=[(i.width, i.height) for i in images], append_images=images)
 
-# white taskbar icon (solid white so it's visible on dark Windows taskbars)
-white_512 = draw_white_icon(512)
-white_512.save(os.path.join(base_dir, 'icon-taskbar.png'))
-white_images = [draw_white_icon(s) for s in [16, 24, 32, 48, 64, 128, 256]]
-white_512.save(
-    os.path.join(base_dir, 'icon-taskbar.ico'),
-    format='ICO',
-    sizes=[(i.width, i.height) for i in white_images],
-    append_images=white_images
-)
-
-print('Icons generated: icon.png, tray-icon.png, icon.ico, icon-taskbar.png, icon-taskbar.ico')
+print('Icons generated: icon.png, icon.ico')
