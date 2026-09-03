@@ -42,10 +42,11 @@ jobs:
           set -o pipefail
           npx electron-builder --win --x64 msi 2>&1 | tee msi.log
 
-      - name: List dist output
-        if: always()
+      - name: Stage & list dist
         shell: bash
-        run: ls -la dist 2>&1 || echo "no dist dir"
+        run: |
+          { echo "# wcopy CI build ${{ github.run_number }}"; echo; echo '## dist listing:'; ls -la dist 2>&1; } > release_notes.md
+          cat release_notes.md
 
       - name: Upload installers to GitHub Release
         if: always()
@@ -53,25 +54,9 @@ jobs:
         with:
           tag_name: ci-build-${{ github.run_number }}
           name: wcopy CI build #${{ github.run_number }}
+          body_path: release_notes.md
           files: |
-            dist/wcopy-setup-*.exe
-            dist/wcopy-*.msi
+            dist/**/*
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload NSIS artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wcopy-installer
-          path: dist/*-setup-*.exe
-          if-no-files-found: ignore
-
-      - name: Upload MSI artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wcopy-msi
-          path: dist/*.msi
-          if-no-files-found: ignore
