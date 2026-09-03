@@ -2,13 +2,16 @@ name: Build Windows Installer
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
-    name: Build wcopy (exe + msi)
+    name: Build wcopy installer
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -24,20 +27,36 @@ jobs:
         run: npm ci
 
       - name: Build Windows installer (nsis + msi)
-        run: npm run build:win
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build:win 2>&1 | tee build.log
+
+      - name: Publish build log to ci-log branch on failure
+        if: failure()
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p diag
+          cp build.log "diag/build-${GITHUB_RUN_NUMBER}.log"
+          git config user.email "ci@wcopy.local"
+          git config user.name "wcopy CI"
+          git add diag
+          git commit -m "ci diag run ${GITHUB_RUN_NUMBER}" || echo "nothing to commit"
+          git push "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:ci-log || echo "push failed"
 
       - name: Upload NSIS installer (.exe)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: wcopy-installer
           path: dist/*-setup-*.exe
-          if-no-files-found: ignore
 
       - name: Upload MSI installer (.msi)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: wcopy-msi
           path: dist/*.msi
-          if-no-files-found: ignore
