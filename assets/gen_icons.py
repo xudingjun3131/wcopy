@@ -97,8 +97,8 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 icon_512 = draw_icon(512)
 icon_512.save(os.path.join(base_dir, 'icon.png'))
 
-# tray icon
-icon_32 = draw_icon(32)
+# tray icon (white so it shows clearly in the Windows notification area / bottom-right)
+icon_32 = draw_white_icon(32)
 icon_32.save(os.path.join(base_dir, 'tray-icon.png'))
 
 # windows ico with multiple sizes

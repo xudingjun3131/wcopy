@@ -276,6 +276,9 @@ function createWindow() {
     icon: path.join(__dirname, '..', 'assets', 'icon-taskbar.png')
   });
 
+  // 弹窗始终置顶，确保以非激活方式显示时也能盖在记事本等原应用之上
+  mainWindow.setAlwaysOnTop(true);
+
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   if (isDev) {
@@ -404,8 +407,9 @@ function toggleWindow() {
   const open = () => {
     opening = false;
     positionWindow();
-    mainWindow.show();
-    mainWindow.focus();
+    // 以「非激活」方式显示，避免抢走原应用（如记事本）的键盘焦点与光标；
+    // 鼠标事件仍能被弹窗接收，双击粘贴时再把焦点还给原应用
+    mainWindow.showInactive();
   };
   if (process.platform === 'win32') {
     // 先异步记录唤起前的前台窗口（此时用户原应用仍在前台），再显示弹窗
@@ -484,43 +488,55 @@ ipcMain.handle('toggle-favorite', (event, id) => { store.toggleFavorite(id); not
 ipcMain.handle('toggle-pin', (event, id) => { store.togglePin(id); notifyHistoryUpdated(); });
 ipcMain.handle('clear-history', () => { store.clear(); notifyHistoryUpdated(); });
 ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
+
 // 复制并粘贴：写入剪贴板 ->（Windows）把焦点还给唤起前的前台应用再发送 Ctrl+V -> 关闭弹窗
+// 关键：Windows 的 SetForegroundWindow 有「前台锁」限制，后台进程直接调用会被拒绝（只闪任务栏）。
+// 必须用 AttachThreadInput 把本线程附着到当前前台线程，再 SetForegroundWindow 才能可靠把焦点还给原应用。
+const PASTE_PS_TEMPLATE = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class W32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+}
+"@
+$hwnd = [IntPtr]::Parse("__HWND__")
+# 附着到当前前台线程（具备前台权限），随后把焦点还给原应用
+$fore = [W32]::GetForegroundWindow()
+$foreThread = [W32]::GetWindowThreadProcessId($fore, [ref]0)
+$self = [W32]::GetCurrentThreadId()
+[W32]::AttachThreadInput($foreThread, $self, $true)
+if ([W32]::IsIconic($hwnd)) { [W32]::ShowWindow($hwnd, 9) }   # SW_RESTORE
+[W32]::SetForegroundWindow($hwnd)
+[W32]::AttachThreadInput($foreThread, $self, $false)
+Start-Sleep -Milliseconds 80
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait("^v")
+`;
 ipcMain.handle('paste-item', async (event, id) => {
   const ok = writeItemToClipboard(id);
   if (!ok) return false;
   if (process.platform === 'win32') {
+    // 先隐藏弹窗：Windows 会把键盘焦点退回唤起前的应用（如记事本），光标随之回来
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
     const hwnd = lastForegroundHwnd;
     if (hwnd && hwnd !== '0') {
-      // 先把焦点还给原应用（如记事本），再发送 Ctrl+V，最后主动关闭弹窗
-      const ps = `
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class FGWin {
-  [DllImport("user32.dll")]
-  public static extern bool SetForegroundWindow(IntPtr hWnd);
-}
-"@
-[FGWin]::SetForegroundWindow([IntPtr]::Parse("${hwnd}"))
-Start-Sleep -Milliseconds 60
-[System.Windows.Forms.SendKeys]::SendWait("^v")
-`;
+      const ps = PASTE_PS_TEMPLATE.replace('__HWND__', hwnd);
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
         if (err) console.error('paste-item SendKeys failed:', err);
       });
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        setTimeout(() => mainWindow.hide(), 160);
-      }
     } else {
-      // 未记录到原窗口句柄时，先隐藏弹窗让焦点回到上一个应用，再粘贴
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
-      setTimeout(() => {
-        const ps = 'Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 30; [System.Windows.Forms.SendKeys]::SendWait("^v")';
-        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
-          if (err) console.error('paste-item SendKeys failed:', err);
-        });
-      }, 60);
+      // 未记录到原窗口句柄：直接把 Ctrl+V 发到当前前台应用（兜底）
+      const ps = 'Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 30; [System.Windows.Forms.SendKeys]::SendWait("^v")';
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
+        if (err) console.error('paste-item SendKeys failed:', err);
+      });
     }
   } else {
     // 非 Windows：写入剪贴板后仅复制（无 SendKeys），粘贴后关闭弹窗
