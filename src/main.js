@@ -432,20 +432,23 @@ async function writeItemToClipboard(id) {
   if (!item) return false;
 
   try {
-    if (item.type === 'text' || item.type === 'code' || item.type === 'link') {
-      clipboard.writeText(item.content);
-    } else if (item.type === 'rich') {
-      clipboard.write({
-        text: item.content,
-        html: item.html || '',
-        rtf: item.rtf || ''
-      });
-    } else if (item.type === 'image') {
+    if (item.type === 'image') {
       const img = nativeImage.createFromBuffer(Buffer.from(item.content.base64, 'base64'));
       clipboard.writeImage(img);
     } else if (item.type === 'file') {
-      // Fallback to text list for files; full CF_HDROP support needs extra work
+      // 暂时以路径文本回写；真实文件(CF_HDROP)的保留需额外工作
       clipboard.writeText(Array.isArray(item.content) ? item.content.join('\n') : item.content);
+    } else {
+      // 文本类（text/link/code/rich）：只要捕获时存了 html 或 rtf，就原样带格式写回，
+      // 避免从 IDE 复制的高亮代码、富文本链接等降级为纯文本
+      if (item.html || item.rtf) {
+        const payload = { text: item.content };
+        if (item.html) payload.html = item.html;
+        if (item.rtf) payload.rtf = item.rtf;
+        clipboard.write(payload);
+      } else {
+        clipboard.writeText(item.content);
+      }
     }
     return true;
   } catch (err) {

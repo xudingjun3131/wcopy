@@ -520,7 +520,10 @@ async function copyItem(item) {
     navigator.clipboard.writeText(text);
   }
   const label = typeof item.content === 'string' ? item.content : (item.type === 'image' ? '[图片]' : '[文件]');
-  statusText.textContent = `已复制：${label.slice(0, 30)}${label.length > 30 ? '...' : ''}`;
+  const preserved = item.type !== 'image' && item.type !== 'file' && (item.html || item.rtf);
+  statusText.textContent = preserved
+    ? `已复制（保留格式）：${label.slice(0, 22)}${label.length > 22 ? '...' : ''}`
+    : `已复制：${label.slice(0, 30)}${label.length > 30 ? '...' : ''}`;
   setTimeout(() => statusText.textContent = '就绪', 2000);
   if (isElectron && window.wcopyAPI.closeWindow) {
     setTimeout(() => window.wcopyAPI.closeWindow(), 200);
