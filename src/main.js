@@ -2,10 +2,12 @@ const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nati
 const path = require('path');
 const { exec } = require('child_process');
 const { ClipboardStore } = require('./store');
+const { SettingsStore } = require('./settings');
 
 let mainWindow = null;
 let tray = null;
 let store = null;
+let settings = null;
 let watcherId = null;
 let lastHash = '';
 
@@ -386,6 +388,13 @@ ipcMain.handle('clear-history', () => { store.clear(); notifyHistoryUpdated(); }
 ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
 ipcMain.handle('window-minimize', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.hide(); });
+ipcMain.handle('get-settings', () => settings ? settings.get() : {});
+ipcMain.handle('set-settings', (event, patch) => {
+  const updated = settings.set(patch || {});
+  if (patch && typeof patch.launchAtLogin === 'boolean') applyLoginItem();
+  if (patch && patch.maxItems) store.maxItems = patch.maxItems;
+  return updated;
+});
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 app.whenReady().then(() => {

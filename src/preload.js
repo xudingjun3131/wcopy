@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('wcopyAPI', {
   clearHistory: () => ipcRenderer.invoke('clear-history'),
   writeItem: (id) => ipcRenderer.invoke('write-item', id),
 
+  // Settings
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  setSettings: (patch) => ipcRenderer.invoke('set-settings', patch),
+
   // Window
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
   closeWindow: () => ipcRenderer.invoke('window-close'),

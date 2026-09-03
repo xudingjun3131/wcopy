@@ -129,6 +129,17 @@ const statusText = document.getElementById('statusText');
 const themeToggle = document.getElementById('themeToggle');
 const minimizeBtn = document.getElementById('minimizeBtn');
 const closeBtn = document.getElementById('closeBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsClose = document.getElementById('settingsClose');
+const setLaunchAtLogin = document.getElementById('setLaunchAtLogin');
+const setMaxItems = document.getElementById('setMaxItems');
+const setMaxItemsVal = document.getElementById('setMaxItemsVal');
+const setTheme = document.getElementById('setTheme');
+const setRetainFav = document.getElementById('setRetainFav');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const appVersionText = document.getElementById('appVersionText');
+let settings = { launchAtLogin: false, maxItems: 200, theme: 'light', clearRetainsFavorites: true };
 
 function formatRelativeTime(timestamp) {
   const diff = Date.now() - timestamp;
@@ -515,4 +526,5 @@ if (isElectron && window.wcopyAPI.onHistoryUpdated) {
 
 // Init
 initTheme();
+loadSettings();
 loadHistory().then(render);

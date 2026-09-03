@@ -21,6 +21,12 @@
       </div>
       <div class="titlebar-center" data-page-node-id="OHm30zT8KSHuaQOAj7GBdk">剪贴板历史</div>
       <div class="titlebar-right" data-page-node-id="lxesE7aiwHcllQAFhdhrWv">
+        <button class="window-btn settings-toggle" id="settingsBtn" title="设置">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
         <button class="window-btn theme-toggle" id="themeToggle" title="切换主题" data-page-node-id="Ywot7Kh2Jke7pKrOoVXsrf">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="WVz2D8KjkMs4FFXJrQCyNS">
             <circle cx="12" cy="12" r="5" data-page-node-id="KGKSh3IbCuuoCHoJIZVGYW"/>
@@ -89,6 +95,66 @@
     <div class="statusbar" data-page-node-id="7OBCmmlVcthpV2jc3Co6yA">
       <span id="statusText" data-page-node-id="ad7BWNkLDvXEHPnSUkLSNE">就绪</span>
       <span class="shortcut-hint" data-page-node-id="NGy8SBizyhXLFsLNllhFNL">Ctrl+Shift+V 唤起 · Enter 粘贴</span>
+    </div>
+  </div>
+
+  <!-- 设置面板 -->
+  <div class="settings-overlay" id="settingsOverlay" style="display:none;">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <span>设置</span>
+        <button class="window-btn" id="settingsClose">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>开机自动启动</span>
+            <small>登录 Windows 后自动在后台运行</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setLaunchAtLogin">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>最大历史条数</span>
+            <small>超出后自动清理最早的非收藏记录</small>
+          </div>
+          <div class="setting-control">
+            <input type="range" id="setMaxItems" min="50" max="1000" step="50">
+            <span id="setMaxItemsVal" class="setting-val">200</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>默认主题</span>
+            <small>浅色 / 深色</small>
+          </div>
+          <div class="setting-control">
+            <select id="setTheme">
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>清除历史时保留收藏</span>
+            <small>清空只删除未收藏且未置顶的记录</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setRetainFav">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-actions">
+          <button class="btn-danger" id="clearAllBtn">清除全部历史（保留收藏）</button>
+        </div>
+        <div class="setting-about">
+          <span id="appVersionText">wcopy</span>
+        </div>
+      </div>
     </div>
   </div>
 
