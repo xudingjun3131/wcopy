@@ -42,13 +42,24 @@ jobs:
           set -o pipefail
           npx electron-builder --win --x64 msi 2>&1 | tee msi.log
 
-      - name: Stage & list dist
+      - name: Stage notes with build logs
         shell: bash
         run: |
-          { echo "# wcopy CI build ${{ github.run_number }}"; echo; echo '## dist listing:'; ls -la dist 2>&1; } > release_notes.md
+          {
+            echo "# wcopy CI build ${{ github.run_number }}"
+            echo
+            echo '## nsis.log (tail):'
+            tail -50 nsis.log 2>/dev/null || echo "none"
+            echo
+            echo '## msi.log (tail):'
+            tail -50 msi.log 2>/dev/null || echo "none"
+            echo
+            echo '## dist exists?'
+            ls -la dist 2>&1 || echo "no dist"
+          } > release_notes.md
           cat release_notes.md
 
-      - name: Upload installers to GitHub Release
+      - name: Upload to GitHub Release
         if: always()
         uses: softprops/action-gh-release@v2
         with:
