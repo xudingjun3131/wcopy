@@ -152,29 +152,51 @@ body {
   color: white;
 }
 
-/* Toolbar */
+/* Toolbar：搜索/筛选/视图合并为一排 */
 .toolbar {
-  padding: 12px 20px 6px;
+  padding: 8px 12px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.search-toggle {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.search-toggle:hover {
+  background: var(--card-bg-hover);
+  color: var(--text);
 }
 
 .search-box {
   position: relative;
-  width: 100%;
-  max-width: 340px;
+  display: none;            /* 默认折叠，点击搜索按钮才展开 */
+  width: 240px;
   height: 34px;
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  display: flex;
+  box-shadow: 0 0 0 3px var(--accent-light);
   align-items: center;
   padding: 0 10px;
   transition: all 0.2s ease;
+}
+
+.search-box.expanded {
+  display: flex;
 }
 
 .search-box:focus-within {
@@ -216,8 +238,8 @@ body {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  width: 100%;
-  max-width: 560px;
+  flex: 1;
+  min-width: 0;
   scrollbar-width: none;
 }
 
@@ -260,17 +282,18 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 0 24px;
+  padding: 6px 20px 0;
 }
 
 .list-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 4px;
+  justify-content: flex-start;
+  padding: 2px 4px;
   color: var(--text-secondary);
   font-size: 12px;
   flex-shrink: 0;
+  min-height: 18px;
 }
 
 #statusText {
@@ -284,6 +307,7 @@ body {
 .view-options {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .view-btn {
@@ -438,7 +462,7 @@ body {
 .card-body {
   flex: 1;
   padding: 0 14px 8px;
-  min-height: 0;
+  min-height: 56px;
   overflow: hidden;
 }
 
@@ -448,7 +472,7 @@ body {
   color: var(--text);
   word-break: break-all;
   display: -webkit-box;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 7;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -459,7 +483,7 @@ body {
   background: var(--bg);
   padding: 10px;
   border-radius: 6px;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 6;
 }
 
 .card-preview.image {

@@ -122,6 +122,8 @@ let isElectron = !!(window.wcopyAPI && window.wcopyAPI.getHistory);
 
 const cardGrid = document.getElementById('cardGrid');
 const searchInput = document.getElementById('searchInput');
+const searchToggle = document.getElementById('searchToggle');
+const searchBox = document.getElementById('searchBox');
 const filterTabs = document.getElementById('filterTabs');
 const resultCount = document.getElementById('resultCount');
 const emptyState = document.getElementById('emptyState');
@@ -428,7 +430,7 @@ async function saveSettings(patch) {
       if (patch.popupShortcut && updated.popupShortcut !== patch.popupShortcut) {
         if (popupShortcutText) popupShortcutText.textContent = displayAccel(updated.popupShortcut);
         statusText.textContent = '该快捷键无效或已被占用，已还原';
-        setTimeout(() => statusText.textContent = '就绪', 2500);
+        setTimeout(() => statusText.textContent = '', 2500);
       }
       return updated;
     } catch (err) {
@@ -483,7 +485,7 @@ function onShortcutCaptureKey(e) {
 
   if (modifiers.length === 0) {
     statusText.textContent = '请同时按住 Ctrl / Alt / Shift';
-    setTimeout(() => statusText.textContent = '就绪', 2000);
+    setTimeout(() => statusText.textContent = '', 2000);
     finishShortcutCapture(false);
     return;
   }
@@ -508,7 +510,7 @@ async function finishShortcutCapture(commit, accel) {
     if (popupShortcutText) popupShortcutText.textContent = shown;
     if (shortcutHint) shortcutHint.textContent = `${shown} 唤起 · Enter 粘贴`;
     statusText.textContent = `弹窗快捷键已设为 ${shown}`;
-    setTimeout(() => statusText.textContent = '就绪', 2000);
+    setTimeout(() => statusText.textContent = '', 2000);
   }
 }
 
@@ -524,7 +526,7 @@ async function copyItem(item) {
   statusText.textContent = preserved
     ? `已复制（保留格式）：${label.slice(0, 22)}${label.length > 22 ? '...' : ''}`
     : `已复制：${label.slice(0, 30)}${label.length > 30 ? '...' : ''}`;
-  setTimeout(() => statusText.textContent = '就绪', 2000);
+  setTimeout(() => statusText.textContent = '', 2000);
   if (isElectron && window.wcopyAPI.closeWindow) {
     setTimeout(() => window.wcopyAPI.closeWindow(), 200);
   }
@@ -574,7 +576,7 @@ async function deleteItem(id) {
   activeIndex = -1;
   render();
   statusText.textContent = '已删除';
-  setTimeout(() => statusText.textContent = '就绪', 1500);
+  setTimeout(() => statusText.textContent = '', 1500);
 }
 
 function setFilter(type) {
@@ -606,6 +608,21 @@ searchInput.addEventListener('input', (e) => {
   activeIndex = -1;
   render();
 });
+
+// 搜索框默认折叠为按钮，点击或 Ctrl+K 展开
+function expandSearch() {
+  if (searchBox) searchBox.classList.add('expanded');
+}
+function collapseSearch() {
+  if (searchBox) searchBox.classList.remove('expanded');
+}
+if (searchToggle && searchBox) {
+  searchToggle.addEventListener('click', () => {
+    const willExpand = !searchBox.classList.contains('expanded');
+    searchBox.classList.toggle('expanded');
+    if (willExpand && searchInput) searchInput.focus();
+  });
+}
 
 filterTabs.addEventListener('click', (e) => {
   if (e.target.classList.contains('tab')) {
@@ -684,7 +701,7 @@ if (clearAllBtn) {
       history = [];
       render();
       statusText.textContent = '已清除全部历史';
-      setTimeout(() => statusText.textContent = '就绪', 1500);
+      setTimeout(() => statusText.textContent = '', 1500);
     }
   });
 }
@@ -699,7 +716,8 @@ document.addEventListener('keydown', (e) => {
 
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault();
-    searchInput.focus();
+    expandSearch();
+    if (searchInput) searchInput.focus();
   }
 
   if (e.key === 'Escape') {
@@ -708,6 +726,7 @@ document.addEventListener('keydown', (e) => {
       searchInput.value = '';
       searchQuery = '';
       render();
+      collapseSearch();
     } else if (window.wcopyAPI && window.wcopyAPI.closeWindow) {
       window.wcopyAPI.closeWindow();
     }
@@ -757,7 +776,7 @@ document.querySelectorAll('.titlebar, .toolbar, .list-header, .statusbar').forEa
   el.style.webkitAppRegion = 'drag';
 });
 
-document.querySelectorAll('.titlebar button, .search-box, .filter-tabs, .view-options, .card, .card-actions, .action-btn').forEach(el => {
+document.querySelectorAll('.titlebar button, .search-toggle, .search-box, .filter-tabs, .view-options, .card, .card-actions, .action-btn').forEach(el => {
   el.style.webkitAppRegion = 'no-drag';
 });
 

@@ -36,9 +36,15 @@
       </div>
     </div>
 
-    <!-- 搜索与筛选 -->
+    <!-- 搜索与筛选：合并为一排，搜索默认折叠为按钮 -->
     <div class="toolbar" data-page-node-id="579pEHm4Y9FLtCp8RIhSdb">
-      <div class="search-box" data-page-node-id="vZToUw51fDuQ2vEdz2MHwa">
+      <button class="search-toggle" id="searchToggle" title="搜索 (Ctrl+K)" data-page-node-id="m5d1ksEcd8EAwznxLs13eR">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="sg1">
+          <circle cx="11" cy="11" r="8" data-page-node-id="sg2"/>
+          <path d="M21 21l-4.35-4.35" data-page-node-id="sg3"/>
+        </svg>
+      </button>
+      <div class="search-box" id="searchBox" data-page-node-id="vZToUw51fDuQ2vEdz2MHwa">
         <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="m5d1ksEcd8EAwznxLs13eR">
           <circle cx="11" cy="11" r="8" data-page-node-id="ChGCRU8WiDk3woa2VTzgNq"/>
           <path d="M21 21l-4.35-4.35" data-page-node-id="TeOMZHb38sZTqJkm2HIb8L"/>
@@ -54,29 +60,29 @@
         <button class="tab" data-type="link" data-page-node-id="obNLR4aZ1HQzf6hwfizMxa">链接</button>
         <button class="tab" data-type="favorite" data-page-node-id="W0Fy4QlNwq4DwMTInHEYkz">收藏</button>
       </div>
+      <div class="view-options" data-page-node-id="pqmhtRr0BQ8CFDlbh4gwNL">
+        <button class="view-btn active" title="网格视图" data-page-node-id="BvEXRQi400bDZRbZY37LDn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="fLjSdPpacBB1yq51x5WV9Q">
+            <rect x="3" y="3" width="7" height="7" rx="1" data-page-node-id="oYsm4WQEqH16l5UOzgZnp7"/>
+            <rect x="14" y="3" width="7" height="7" rx="1" data-page-node-id="pF2qjLw0TYx5r0L83bU0Hy"/>
+            <rect x="3" y="14" width="7" height="7" rx="1" data-page-node-id="iiJDPpIFEm3L8EwRqM6hxs"/>
+            <rect x="14" y="14" width="7" height="7" rx="1" data-page-node-id="tzEkUnBkgrMTCGEYYmyaUZ"/>
+          </svg>
+        </button>
+        <button class="view-btn" title="列表视图" data-page-node-id="tiGiESQyALsDtnBgKl1IKA">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="JAh8U6vLTrmHEb9CYQfXG9">
+            <line x1="3" y1="6" x2="21" y2="6" data-page-node-id="aWmaLZE5BOXKNc23RUCRrz"/>
+            <line x1="3" y1="12" x2="21" y2="12" data-page-node-id="FOhKPwHWcOCbKxF8Do1yW5"/>
+            <line x1="3" y1="18" x2="21" y2="18" data-page-node-id="e2xsE48EaLizdqgdYcx8Qh"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- 主内容区 -->
     <div class="main-content" data-page-node-id="inxle8NAbTR8HPsi6zLaZb">
       <div class="list-header" data-page-node-id="YBBo284cHeWBPhPK7IjcW5">
-        <span id="statusText" data-page-node-id="ad7BWNkLDvXEHPnSUkLSNE">就绪</span>
-        <div class="view-options" data-page-node-id="pqmhtRr0BQ8CFDlbh4gwNL">
-          <button class="view-btn active" title="网格视图" data-page-node-id="BvEXRQi400bDZRbZY37LDn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="fLjSdPpacBB1yq51x5WV9Q">
-              <rect x="3" y="3" width="7" height="7" rx="1" data-page-node-id="oYsm4WQEqH16l5UOzgZnp7"/>
-              <rect x="14" y="3" width="7" height="7" rx="1" data-page-node-id="pF2qjLw0TYx5r0L83bU0Hy"/>
-              <rect x="3" y="14" width="7" height="7" rx="1" data-page-node-id="iiJDPpIFEm3L8EwRqM6hxs"/>
-              <rect x="14" y="14" width="7" height="7" rx="1" data-page-node-id="tzEkUnBkgrMTCGEYYmyaUZ"/>
-            </svg>
-          </button>
-          <button class="view-btn" title="列表视图" data-page-node-id="tiGiESQyALsDtnBgKl1IKA">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="JAh8U6vLTrmHEb9CYQfXG9">
-              <line x1="3" y1="6" x2="21" y2="6" data-page-node-id="aWmaLZE5BOXKNc23RUCRrz"/>
-              <line x1="3" y1="12" x2="21" y2="12" data-page-node-id="FOhKPwHWcOCbKxF8Do1yW5"/>
-              <line x1="3" y1="18" x2="21" y2="18" data-page-node-id="e2xsE48EaLizdqgdYcx8Qh"/>
-            </svg>
-          </button>
-        </div>
+        <span id="statusText" data-page-node-id="ad7BWNkLDvXEHPnSUkLSNE"></span>
       </div>
       <div class="card-grid" id="cardGrid" data-page-node-id="EG7DIQh3vaV0kINDGYv9BL"></div>
       <div class="empty-state" id="emptyState" style="display: none;" data-page-node-id="IyLyQCWcsXSnAuwjEmDxIG">
