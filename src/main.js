@@ -11,6 +11,8 @@ let settings = null;
 let watcherId = null;
 let lastHash = '';
 let popupAccel = 'CommandOrControl+Shift+V';
+let lastForegroundHwnd = null; // 唤起弹窗前的前台窗口句柄（粘贴时用于还原焦点）
+let opening = false;           // 防止快捷键连发重复唤起
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -284,11 +286,8 @@ function createWindow() {
     mainWindow = null;
   });
 
-  mainWindow.on('blur', () => {
-    if (!isDev) {
-      mainWindow.hide();
-    }
-  });
+  // 注意：不再在 blur 时自动隐藏窗口。弹窗仅在「粘贴完成后」或「点击 X / 再次按快捷键 / Esc」时关闭，
+  // 这样用户点击弹窗区域外不会被关掉，也保证双击粘贴能把内容送回唤起前正在使用的应用。
 
   mainWindow.once('ready-to-show', () => {
     positionWindow();
@@ -384,6 +383,13 @@ function positionWindow() {
   mainWindow.setBounds({ x: nx, y: ny, width: nw, height: nh });
 }
 
+// 获取当前前台窗口句柄（仅 Windows），用于粘贴时把焦点还给原应用
+const GET_FG_HWND_PS = 'Add-Type @"using System;using System.Runtime.InteropServices;public class GW{[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();}"@; [GW]::GetForegroundWindow().ToString()';
+function parseHwnd(stdout) {
+  const s = (stdout || '').toString().trim();
+  return /^\d+$/.test(s) ? s : null;
+}
+
 function toggleWindow() {
   if (!mainWindow) {
     createWindow();
@@ -391,10 +397,24 @@ function toggleWindow() {
   }
   if (mainWindow.isVisible()) {
     mainWindow.hide();
-  } else {
+    return;
+  }
+  if (opening) return;
+  opening = true;
+  const open = () => {
+    opening = false;
     positionWindow();
     mainWindow.show();
     mainWindow.focus();
+  };
+  if (process.platform === 'win32') {
+    // 先异步记录唤起前的前台窗口（此时用户原应用仍在前台），再显示弹窗
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', GET_FG_HWND_PS], { timeout: 1000, windowsHide: true }, (err, stdout) => {
+      lastForegroundHwnd = parseHwnd(stdout);
+      open();
+    });
+  } else {
+    open();
   }
 }
 
@@ -464,21 +484,47 @@ ipcMain.handle('toggle-favorite', (event, id) => { store.toggleFavorite(id); not
 ipcMain.handle('toggle-pin', (event, id) => { store.togglePin(id); notifyHistoryUpdated(); });
 ipcMain.handle('clear-history', () => { store.clear(); notifyHistoryUpdated(); });
 ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
-// 复制并粘贴：写入剪贴板 -> 隐藏窗口 -> 向刚才失焦的应用发送 Ctrl+V（仅 Windows）
+// 复制并粘贴：写入剪贴板 ->（Windows）把焦点还给唤起前的前台应用再发送 Ctrl+V -> 关闭弹窗
 ipcMain.handle('paste-item', async (event, id) => {
   const ok = writeItemToClipboard(id);
   if (!ok) return false;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.hide();
-  }
   if (process.platform === 'win32') {
-    // 等窗口真正让出焦点，再把 Ctrl+V 发给之前获得焦点的应用
-    setTimeout(() => {
-      const ps = "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')";
+    const hwnd = lastForegroundHwnd;
+    if (hwnd && hwnd !== '0') {
+      // 先把焦点还给原应用（如记事本），再发送 Ctrl+V，最后主动关闭弹窗
+      const ps = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class FGWin {
+  [DllImport("user32.dll")]
+  public static extern bool SetForegroundWindow(IntPtr hWnd);
+}
+"@
+[FGWin]::SetForegroundWindow([IntPtr]::Parse("${hwnd}"))
+Start-Sleep -Milliseconds 60
+[System.Windows.Forms.SendKeys]::SendWait("^v")
+`;
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
         if (err) console.error('paste-item SendKeys failed:', err);
       });
-    }, 180);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        setTimeout(() => mainWindow.hide(), 160);
+      }
+    } else {
+      // 未记录到原窗口句柄时，先隐藏弹窗让焦点回到上一个应用，再粘贴
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+      setTimeout(() => {
+        const ps = 'Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 30; [System.Windows.Forms.SendKeys]::SendWait("^v")';
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
+          if (err) console.error('paste-item SendKeys failed:', err);
+        });
+      }, 60);
+    }
+  } else {
+    // 非 Windows：写入剪贴板后仅复制（无 SendKeys），粘贴后关闭弹窗
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
   }
   return true;
 });

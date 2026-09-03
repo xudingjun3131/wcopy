@@ -747,7 +747,7 @@ document.addEventListener('keydown', (e) => {
     selectCard(activeIndex);
   } else if (e.key === 'Enter' && activeIndex >= 0) {
     e.preventDefault();
-    copyItem(items[activeIndex]);
+    pasteItem(items[activeIndex]);
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'd' && activeIndex >= 0) {
     e.preventDefault();
     deleteItem(items[activeIndex].id);
