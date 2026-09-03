@@ -42,32 +42,34 @@ jobs:
           set -o pipefail
           npx electron-builder --win --x64 msi 2>&1 | tee msi.log
 
-      - name: Publish build logs to ci-log branch
+      - name: List dist output
         if: always()
         shell: bash
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.email "ci@wcopy.local"
-          git config user.name "wcopy CI"
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          mkdir -p diag
-          cp nsis.log "diag/nsis-${GITHUB_RUN_NUMBER}.log" 2>/dev/null || true
-          cp msi.log "diag/msi-${GITHUB_RUN_NUMBER}.log" 2>/dev/null || true
-          git add -f diag
-          git commit -m "ci diag run ${GITHUB_RUN_NUMBER}" || echo "nothing to commit"
-          git push "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:ci-log || echo "push failed"
+        run: ls -la dist 2>&1 || echo "no dist dir"
 
-      - name: Upload NSIS installer (.exe)
-        if: steps.nsis.outcome == 'success'
+      - name: Upload installers to GitHub Release
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-build-${{ github.run_number }}
+          name: wcopy CI build #${{ github.run_number }}
+          files: |
+            dist/wcopy-setup-*.exe
+            dist/wcopy-*.msi
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload NSIS artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wcopy-installer
           path: dist/*-setup-*.exe
           if-no-files-found: ignore
 
-      - name: Upload MSI installer (.msi)
-        if: steps.msi.outcome == 'success'
+      - name: Upload MSI artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wcopy-msi
