@@ -107,6 +107,14 @@ body {
   font-size: 14px;
 }
 
+.logo-img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
 .window-btn {
   width: 32px;
   height: 28px;

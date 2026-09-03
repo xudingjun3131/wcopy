@@ -50,13 +50,29 @@ npm start
 
 ### 方式 A：GitHub Actions 自动出包（推荐，最简单）
 
-仓库已内置 `.github/workflows/build-windows.yml`，在真实的 Windows runner 上原生构建，**无需你本机安装 Wine 或 electron-builder**：
+仓库已内置 `.github/workflows/build-windows.yml`，在真实的 Windows runner 上原生构建，**无需你本机安装 Wine 或 electron-builder**。
 
-1. 把代码推送到 GitHub 仓库（打 `v*` 标签，或到仓库 **Actions** 页手动 **Run workflow**）
-2. 进入 **Actions → Build Windows Installer → 最新一次运行**
-3. 在 **Artifacts** 中下载：
-   - `wcopy-installer` → 内含 `wcopy-setup-x.y.z.exe`（NSIS 安装包）
-   - `wcopy-msi` → 内含 `wcopy-x.y.z.msi`（MSI 安装包）
+> **构建只在 tag 触发**：CI 的 `on.push` 只监听 `v*` 形式的 tag（版本号，如 `v1.0.1`）。普通 push 到 `main` **不会**出包。tag 即版本号，CI 会把 `package.json` 的 version 同步为 tag，产物名与 GitHub Release 都与 tag 一致。
+
+**一键发布**（自动 +1 版本号、打 tag、推送 tag 触发构建）：
+
+```bash
+./scripts/release.sh          # patch +1（1.0.0 → 1.0.1）
+./scripts/release.sh minor    # minor +1（1.0.0 → 1.1.0）
+./scripts/release.sh major    # major +1（1.0.0 → 2.0.0）
+./scripts/release.sh 1.2.3    # 指定版本号
+```
+
+脚本等价于：`npm version <版本>`（改 package.json + 打 `v<版本>` tag）→ `git push --follow-tags`。
+
+也可以手动操作：
+
+1. 用 `npm version <patch|minor|major|x.y.z>` 升级版本（会自动打 `vX.Y.Z` tag）
+2. `git push --follow-tags` 推送 commit 和 tag
+3. 推送 tag 后 **Actions → Build Windows Installer** 自动开始构建
+4. 在 **Releases** 页下载本次 tag 的产出：
+   - `wcopy-setup-x.y.z.exe`（NSIS 安装包）
+   - `wcopy-x.y.z.msi`（MSI 安装包）
 
 ### 方式 B：Windows 本机一条命令
 

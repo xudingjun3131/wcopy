@@ -1,8 +1,9 @@
 name: Build Windows Installer
 
+# 只有打 tag（版本号，形如 v1.0.1）才会触发打包构建。
+# 普通 push 到 main 不再触发构建，避免无意义出包。
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
@@ -16,6 +17,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # tag 就是版本号：把 package.json 的 version 同步成 tag（去掉 v 前缀），
+      # 这样产物名 / GitHub Release 都跟 tag 一致。
+      - name: Apply version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Building version: $VERSION (from tag ${{ github.ref_name }})"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,10 +52,11 @@ jobs:
           npx electron-builder --win --x64 --config.win.target=msi --publish=never 2>&1 | tee msi.log
 
       - name: Stage notes with build logs
+        if: success()
         shell: bash
         run: |
           {
-            echo "# wcopy CI build ${{ github.run_number }}"
+            echo "# wcopy ${{ github.ref_name }}"
             echo
             echo '## nsis.log (tail):'
             tail -50 nsis.log 2>/dev/null || echo "none"
@@ -56,11 +70,11 @@ jobs:
           cat release_notes.md
 
       - name: Upload to GitHub Release
-        if: always()
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ci-build-${{ github.run_number }}
-          name: wcopy CI build #${{ github.run_number }}
+          tag_name: ${{ github.ref_name }}
+          name: wcopy ${{ github.ref_name }}
           body_path: release_notes.md
           files: |
             dist/wcopy-setup-*.exe
