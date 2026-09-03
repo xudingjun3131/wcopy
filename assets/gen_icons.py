@@ -50,6 +50,47 @@ def draw_icon(size):
 
     return img
 
+def draw_white_icon(size):
+    """Windows taskbar icon: solid white clipboard so it shows clearly on dark taskbars."""
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    body_left = size // 4
+    body_top = size // 5
+    body_w = size // 2
+    body_h = size * 3 // 5
+    corner = size // 12
+    draw.rounded_rectangle(
+        [body_left, body_top, body_left + body_w, body_top + body_h],
+        radius=corner,
+        fill=(255, 255, 255, 255)
+    )
+
+    # clipboard clip at top
+    clip_left = size // 2 - size // 8
+    clip_top = body_top - size // 22
+    clip_w = size // 4
+    clip_h = size // 11
+    draw.rounded_rectangle(
+        [clip_left, clip_top, clip_left + clip_w, clip_top + clip_h],
+        radius=size // 28,
+        fill=(255, 255, 255, 255)
+    )
+
+    # text lines (light gray so visible on white body)
+    line_y1 = body_top + body_h // 4
+    line_y2 = body_top + body_h // 2
+    line_y3 = body_top + body_h * 3 // 4
+    line_color = (200, 200, 200, 255)
+    line_w = body_w * 3 // 5
+    line_left = body_left + (body_w - line_w) // 2
+    lw = max(2, size // 32)
+    draw.line([(line_left, line_y1), (line_left + line_w, line_y1)], fill=line_color, width=lw)
+    draw.line([(line_left, line_y2), (line_left + line_w * 0.8, line_y2)], fill=line_color, width=lw)
+    draw.line([(line_left, line_y3), (line_left + line_w * 0.5, line_y3)], fill=line_color, width=lw)
+
+    return img
+
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 # app icon
@@ -65,4 +106,15 @@ ico = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
 images = [draw_icon(s) for s in [16, 24, 32, 48, 64, 128, 256]]
 ico.save(os.path.join(base_dir, 'icon.ico'), format='ICO', sizes=[(i.width, i.height) for i in images], append_images=images)
 
-print('Icons generated: icon.png, tray-icon.png, icon.ico')
+# white taskbar icon (solid white so it's visible on dark Windows taskbars)
+white_512 = draw_white_icon(512)
+white_512.save(os.path.join(base_dir, 'icon-taskbar.png'))
+white_images = [draw_white_icon(s) for s in [16, 24, 32, 48, 64, 128, 256]]
+white_512.save(
+    os.path.join(base_dir, 'icon-taskbar.ico'),
+    format='ICO',
+    sizes=[(i.width, i.height) for i in white_images],
+    append_images=white_images
+)
+
+print('Icons generated: icon.png, tray-icon.png, icon.ico, icon-taskbar.png, icon-taskbar.ico')
