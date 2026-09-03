@@ -7,7 +7,8 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def recolor_to_white(img):
-    """把 Logo 中偏亮/偏蓝青的内容线转成白色，保留深色底板和透明度。"""
+    """把 Logo 中不透明的彩色内容（蓝青色“敢客 / itgank”）转成纯白，
+    深色圆角底板视为背景改为透明，最终得到：透明背景 + 白色 Logo 内容。"""
     rgba = img.convert('RGBA')
     px = rgba.load()
     width, height = rgba.size
@@ -15,11 +16,12 @@ def recolor_to_white(img):
         for x in range(width):
             r, g, b, a = px[x, y]
             if a < 10:
-                continue
-            # 内容线（蓝青色或偏亮）转成白色；深色背景保留
-            brightness = max(r, g, b)
-            if brightness > 70:
+                continue  # 原本就透明，保持
+            # 蓝青色/偏亮的内容线 -> 白色；深色底板（接近中性暗色）-> 透明
+            if max(r, g, b) > 60:
                 px[x, y] = (255, 255, 255, a)
+            else:
+                px[x, y] = (0, 0, 0, 0)
     return rgba
 
 
