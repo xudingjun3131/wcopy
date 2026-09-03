@@ -125,7 +125,7 @@ npm run build:win
 
 - 历史记录保存在当前用户的 `AppData`（Electron `userData`）目录下（`history.json` / `settings.json`），**与安装目录（Program Files）分离**。
 - 因此覆盖安装、升级版本、甚至重装系统后只要用户配置目录还在，历史剪切板数据都不会丢。
-- 安装包已显式设置 `deleteAppDataOnUninstall: false`，**卸载时也不会删除用户历史数据**（如需彻底清理，请手动删除该目录）。
+- NSIS 安装包已显式设置 `deleteAppDataOnUninstall: false`，**卸载时也不会删除用户历史数据**（如需彻底清理，请手动删除该目录）。MSI 安装包本身不会删除用户 `AppData`，同样安全。
 - 注意：`perMachine` 安装是面向「所有用户」的，每位 Windows 用户有各自独立的历史记录，互不共享。
 
 ## 许可证

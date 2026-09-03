@@ -43,16 +43,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          # 只构建 nsis 时，必须把 msi 配置置 null，否则 electron-builder 校验报
-          # "configuration.msi should be one of these: null"
-          npx electron-builder --win --x64 --config.win.target=nsis --config.msi=null --publish=never 2>&1 | tee nsis.log
+          npx electron-builder --win --x64 --config.win.target=nsis --publish=never 2>&1 | tee nsis.log
 
       - name: Build MSI installer (.msi)
         shell: bash
         run: |
           set -o pipefail
-          # 只构建 msi 时，同理把 nsis 配置置 null
-          npx electron-builder --win --x64 --config.win.target=msi --config.nsis=null --publish=never 2>&1 | tee msi.log
+          npx electron-builder --win --x64 --config.win.target=msi --publish=never 2>&1 | tee msi.log
 
       - name: Stage notes with build logs
         if: success()

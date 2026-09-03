@@ -51,7 +51,6 @@
     "msi": {
       "oneClick": false,
       "perMachine": true,
-      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "wcopy",
