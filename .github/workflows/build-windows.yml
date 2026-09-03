@@ -27,20 +27,16 @@ jobs:
         run: npm ci
 
       - name: Build NSIS installer (.exe)
-        id: nsis
         shell: bash
-        continue-on-error: true
         run: |
           set -o pipefail
-          npx electron-builder --win --x64 --config.win.target=nsis 2>&1 | tee nsis.log
+          npx electron-builder --win --x64 --config.win.target=nsis --publish=never 2>&1 | tee nsis.log
 
       - name: Build MSI installer (.msi)
-        id: msi
         shell: bash
-        continue-on-error: true
         run: |
           set -o pipefail
-          npx electron-builder --win --x64 --config.win.target=msi 2>&1 | tee msi.log
+          npx electron-builder --win --x64 --config.win.target=msi --publish=never 2>&1 | tee msi.log
 
       - name: Stage notes with build logs
         shell: bash
@@ -67,7 +63,10 @@ jobs:
           name: wcopy CI build #${{ github.run_number }}
           body_path: release_notes.md
           files: |
-            dist/**/*
+            dist/wcopy-setup-*.exe
+            dist/wcopy-*.msi
+            dist/*.blockmap
+            dist/latest.yml
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
