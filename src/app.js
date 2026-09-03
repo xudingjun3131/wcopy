@@ -265,6 +265,7 @@ function createCard(item, index) {
   card.addEventListener('click', (e) => {
     if (e.target.closest('.action-btn')) return;
     selectCard(index);
+    copyItem(item);
   });
 
   card.addEventListener('dblclick', (e) => {
@@ -743,9 +744,6 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     activeIndex = (activeIndex - 1 + items.length) % items.length;
     selectCard(activeIndex);
-  } else if (e.key === 'Enter' && activeIndex >= 0) {
-    e.preventDefault();
-    copyItem(items[activeIndex]);
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'd' && activeIndex >= 0) {
     e.preventDefault();
     deleteItem(items[activeIndex].id);
