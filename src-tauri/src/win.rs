@@ -4,7 +4,6 @@
 use std::ffi::c_void;
 use std::time::Duration;
 
-use windows::core::PWSTR;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::ProcessStatus::*;
 use windows::Win32::System::Threading::*;
@@ -25,16 +24,19 @@ pub fn get_active_app_name() -> String {
         }
         let mut pid = 0u32;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        let handle = OpenProcess(
+        let handle = match OpenProcess(
             PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-            BOOL::FALSE,
+            BOOL(0),
             pid,
-        );
+        ) {
+            Ok(h) => h,
+            Err(_) => return String::new(),
+        };
         if handle.is_invalid() {
             return String::new();
         }
         let mut buf = [0u16; 260];
-        let n = GetModuleBaseNameW(handle, None, PWSTR(buf.as_mut_ptr()), buf.len() as u32);
+        let n = GetModuleBaseNameW(handle, None, &mut buf);
         let _ = CloseHandle(handle);
         if n == 0 {
             return String::new();
@@ -45,7 +47,7 @@ pub fn get_active_app_name() -> String {
     }
 }
 
-fn key_input(vk: u16, flags: u32) -> INPUT {
+fn key_input(vk: VIRTUAL_KEY, flags: u32) -> INPUT {
     INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
@@ -75,25 +77,20 @@ pub fn send_ctrl_v(hwnd: isize) {
 
         // Attach our thread input to the foreground thread so SetForegroundWindow
         // is allowed to steal focus (Windows "foreground lock" restriction).
-        let _ = AttachThreadInput(ft, self_t, BOOL::TRUE);
+        let _ = AttachThreadInput(ft, self_t, BOOL(1));
         let _ = SetForegroundWindow(target);
-        let _ = AttachThreadInput(ft, self_t, BOOL::FALSE);
+        let _ = AttachThreadInput(ft, self_t, BOOL(0));
 
         // Brief settle so the target window is actually foreground before we type.
         std::thread::sleep(Duration::from_millis(40));
 
-        let vk_ctrl: u16 = VK_CONTROL.0;
-        let vk_v: u16 = 0x56;
-        let mut inputs = [
-            key_input(vk_ctrl, 0),
+        let vk_v: VIRTUAL_KEY = VIRTUAL_KEY(0x56);
+        let inputs = [
+            key_input(VK_CONTROL, 0),
             key_input(vk_v, 0),
             key_input(vk_v, KEYEVENTF_KEYUP.0),
-            key_input(vk_ctrl, KEYEVENTF_KEYUP.0),
+            key_input(VK_CONTROL, KEYEVENTF_KEYUP.0),
         ];
-        let _ = SendInput(
-            inputs.len() as u32,
-            inputs.as_mut_ptr(),
-            std::mem::size_of::<INPUT>() as i32,
-        );
+        let _ = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
     }
 }
