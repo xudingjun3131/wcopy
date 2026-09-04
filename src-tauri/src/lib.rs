@@ -39,6 +39,8 @@ pub struct AppState {
     pub bounds_size: Mutex<Option<(i32, i32)>>,
     /// 最近一次窗口位置（物理像素，来自 Moved 事件载荷）。
     pub bounds_pos: Mutex<Option<(i32, i32)>>,
+    /// 上次托盘点击时间戳（ms），用于防抖，避免连发事件导致窗口闪烁。
+    pub last_tray_click: Mutex<i64>,
 }
 
 fn now_ms() -> i64 {
@@ -123,7 +125,10 @@ fn classify(raw: &RawClip) -> (String, Value, Option<String>, i64) {
     (item_type.to_string(), Value::String(text), html, chars)
 }
 
-fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str, force_dock: bool) {
+/// 将主窗口按 `pos`（left/right/top/bottom）停靠到当前屏幕工作区边缘。
+/// 只使用默认停靠尺寸，不依赖保存的 x/y，避免首次/后续打开位置不一致，
+/// 也避免在 set_settings 中调用时产生死锁（本函数不再访问 settings mutex）。
+fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str) {
     let monitor = win
         .current_monitor()
         .or_else(|_| app.primary_monitor())
@@ -133,43 +138,25 @@ fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str, force
         Some(m) => m.work_area(),
         None => return,
     };
-    let state = app.state::<AppState>();
-    let saved: Option<WindowBounds> = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.window_bounds.clone();
     const MIN_W: i32 = 420;
     const MIN_H: i32 = 360;
+    const DEFAULT_DOCK_W: i32 = 460;
+    const DEFAULT_DOCK_H: i32 = 460;
 
-    // 尺寸：有保存过则用保存的尺寸（夹紧到合法范围与屏幕内），否则按靠边停靠默认尺寸。
-    let (mut w, mut h): (i32, i32) = match pos {
-        "top" | "bottom" => (area.size.width as i32, 460),
-        _ => (460, area.size.height as i32),
+    // 停靠面板的尺寸：左右贴边占满整高、默认宽度；上下贴边占满整宽、默认高度。
+    let (mut w, mut h) = match pos {
+        "top" | "bottom" => (area.size.width as i32, DEFAULT_DOCK_H),
+        _ => (DEFAULT_DOCK_W, area.size.height as i32),
     };
-    if let Some(b) = &saved {
-        w = b.width.max(MIN_W).min(area.size.width as i32);
-        h = b.height.max(MIN_H).min(area.size.height as i32);
-    }
+    w = w.max(MIN_W).min(area.size.width as i32);
+    h = h.max(MIN_H).min(area.size.height as i32);
 
-    // 位置：未强制停靠且保存的位置仍落在当前屏幕工作区内 -> 用保存的位置；
-    // 否则按 popup_position 重新靠边停靠。
-    let (x, y): (i32, i32) = {
-        let use_saved = !force_dock
-            && saved.as_ref().map_or(false, |b| {
-                b.x >= area.position.x
-                    && b.x + w <= area.position.x + area.size.width as i32
-                    && b.y >= area.position.y
-                    && b.y + h <= area.position.y + area.size.height as i32
-            });
-        if use_saved {
-            let b = saved.as_ref().unwrap();
-            (b.x, b.y)
-        } else {
-            match pos {
-                "left" => (area.position.x, area.position.y),
-                "right" => (area.position.x + area.size.width as i32 - w, area.position.y),
-                "top" => (area.position.x, area.position.y),
-                "bottom" => (area.position.x, area.position.y + area.size.height as i32 - h),
-                _ => (area.position.x + area.size.width as i32 - w, area.position.y),
-            }
-        }
+    let (x, y) = match pos {
+        "left" => (area.position.x, area.position.y),
+        "right" => (area.position.x + area.size.width as i32 - w, area.position.y),
+        "top" => (area.position.x, area.position.y),
+        "bottom" => (area.position.x, area.position.y + area.size.height as i32 - h),
+        _ => (area.position.x + area.size.width as i32 - w, area.position.y),
     };
     let _ = win.set_size(PhysicalSize::new(w as u32, h as u32));
     let _ = win.set_position(PhysicalPosition::new(x, y));
@@ -226,8 +213,9 @@ fn toggle_popup(app: &tauri::AppHandle, state: &AppState) {
             *state.target_hwnd.lock().unwrap_or_else(|e| e.into_inner()) = win::get_foreground_window();
         }
         let pos = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
-        position_window(app, &win, &pos, false);
+        position_window(app, &win, &pos);
         let _ = win.show();
+        let _ = win.set_focus();
     }
 }
 
@@ -379,7 +367,7 @@ fn register_popup_shortcut(app: &tauri::AppHandle) {
         .state::<AppState>()
         .settings
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .data
         .popup_shortcut
         .clone();
@@ -416,7 +404,7 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "show" => {
                 if let Some(w) = app.get_webview_window("main") {
                     let pos = app.state::<AppState>().settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
-                    position_window(app, &w, &pos, false);
+                    position_window(app, &w, &pos);
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
@@ -428,7 +416,19 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             if let TrayIconEvent::Click { .. } = event {
                 let app = tray.app_handle();
                 let state = app.state::<AppState>();
-                toggle_popup(app, &state);
+                let now = now_ms();
+                let mut last = state.last_tray_click.lock().unwrap_or_else(|e| e.into_inner());
+                if now - *last < 300 {
+                    return;
+                }
+                *last = now;
+                drop(last);
+                if let Some(w) = app.get_webview_window("main") {
+                    let pos = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
+                    position_window(app, &w, &pos);
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
             }
         })
         .build(app)?;
@@ -471,7 +471,7 @@ fn write_item(state: State<AppState>, id: String) -> bool {
     let item = state
         .store
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .items
         .iter()
         .find(|i| i.id == id)
@@ -508,51 +508,70 @@ fn get_settings(state: State<AppState>) -> Settings {
 
 #[tauri::command]
 fn set_settings(app: tauri::AppHandle, state: State<AppState>, patch: Value) -> Settings {
-    let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(v) = patch.get("launchAtLogin").and_then(|v| v.as_bool()) {
-        s.data.launch_at_login = v;
-    }
-    if let Some(v) = patch.get("maxItems").and_then(|v| v.as_i64()) {
-        s.data.max_items = v;
-    }
-    if let Some(v) = patch.get("theme").and_then(|v| v.as_str()) {
-        s.data.theme = v.to_string();
-    }
-    if let Some(v) = patch.get("clearRetainsFavorites").and_then(|v| v.as_bool()) {
-        s.data.clear_retains_favorites = v;
-    }
-    if let Some(v) = patch.get("popupPosition").and_then(|v| v.as_str()) {
-        s.data.popup_position = v.to_string();
-    }
-    if let Some(v) = patch.get("popupShortcut").and_then(|v| v.as_str()) {
-        s.data.popup_shortcut = v.to_string();
-    }
-    s.save();
+    // 先集中修改 settings 并保存，记录哪些字段发生变化；
+    // 所有可能触发窗口/锁操作的副作用都在 settings 锁释放后再执行，避免死锁。
+    let (
+        data,
+        launch_changed,
+        max_changed,
+        position_changed,
+        shortcut_changed,
+        new_position,
+        new_max,
+    ) = {
+        let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(v) = patch.get("launchAtLogin").and_then(|v| v.as_bool()) {
+            s.data.launch_at_login = v;
+        }
+        if let Some(v) = patch.get("maxItems").and_then(|v| v.as_i64()) {
+            s.data.max_items = v;
+        }
+        if let Some(v) = patch.get("theme").and_then(|v| v.as_str()) {
+            s.data.theme = v.to_string();
+        }
+        if let Some(v) = patch.get("clearRetainsFavorites").and_then(|v| v.as_bool()) {
+            s.data.clear_retains_favorites = v;
+        }
+        if let Some(v) = patch.get("popupPosition").and_then(|v| v.as_str()) {
+            s.data.popup_position = v.to_string();
+        }
+        if let Some(v) = patch.get("popupShortcut").and_then(|v| v.as_str()) {
+            s.data.popup_shortcut = v.to_string();
+        }
+        s.save();
 
-    if patch.get("launchAtLogin").is_some() {
-        if s.data.launch_at_login {
+        let launch_changed = patch.get("launchAtLogin").is_some();
+        let max_changed = patch.get("maxItems").is_some();
+        let position_changed = patch.get("popupPosition").is_some();
+        let shortcut_changed = patch.get("popupShortcut").is_some();
+        let new_position = s.data.popup_position.clone();
+        let new_max = s.data.max_items.max(1) as usize;
+        (s.data.clone(), launch_changed, max_changed, position_changed, shortcut_changed, new_position, new_max)
+    };
+
+    if launch_changed {
+        if data.launch_at_login {
             let _ = app.autolaunch().enable();
         } else {
             let _ = app.autolaunch().disable();
         }
     }
-    if patch.get("maxItems").is_some() {
-        let new_max = s.data.max_items.max(1) as usize;
+    if max_changed {
         let mut store = state.store.lock().unwrap_or_else(|e| e.into_inner());
         store.max_items = new_max;
         store.enforce_max_items();
     }
-    if patch.get("popupPosition").is_some() {
+    if position_changed {
         if let Some(win) = app.get_webview_window("main") {
             if win.is_visible().unwrap_or(false) {
-                position_window(&app, &win, &s.data.popup_position, true);
+                position_window(&app, &win, &new_position);
             }
         }
     }
-    if patch.get("popupShortcut").is_some() {
+    if shortcut_changed {
         register_popup_shortcut(&app);
     }
-    s.data.clone()
+    data
 }
 
 #[tauri::command]
@@ -561,7 +580,7 @@ fn capture_popup_shortcut(app: tauri::AppHandle, active: bool) {
         .state::<AppState>()
         .settings
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .data
         .popup_shortcut
         .clone();
@@ -625,6 +644,7 @@ pub fn run() {
                 last_bounds_save: Mutex::new(0),
                 bounds_size: Mutex::new(None),
                 bounds_pos: Mutex::new(None),
+                last_tray_click: Mutex::new(0),
             });
             register_popup_shortcut(&app.handle());
             build_tray(app)?;

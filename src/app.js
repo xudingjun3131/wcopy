@@ -141,7 +141,6 @@ const settingsClose = document.getElementById('settingsClose');
 const setLaunchAtLogin = document.getElementById('setLaunchAtLogin');
 const setMaxItems = document.getElementById('setMaxItems');
 const setMaxItemsVal = document.getElementById('setMaxItemsVal');
-const setTheme = document.getElementById('setTheme');
 const setPopupPosition = document.getElementById('setPopupPosition');
 const setRetainFav = document.getElementById('setRetainFav');
 const clearAllBtn = document.getElementById('clearAllBtn');
@@ -439,7 +438,6 @@ function applySettingsToUI() {
     setMaxItems.value = settings.maxItems || 200;
     setMaxItemsVal.textContent = settings.maxItems || 200;
   }
-  if (setTheme) setTheme.value = settings.theme === 'dark' ? 'dark' : 'light';
   if (setPopupPosition) setPopupPosition.value = settings.popupPosition || 'right';
   applyDockLayout();
   if (setRetainFav) setRetainFav.checked = settings.clearRetainsFavorites !== false;
@@ -712,15 +710,6 @@ if (setMaxItems) {
   });
   setMaxItems.addEventListener('change', async () => {
     await saveSettings({ maxItems: parseInt(setMaxItems.value, 10) });
-  });
-}
-
-if (setTheme) {
-  setTheme.addEventListener('change', async () => {
-    await saveSettings({ theme: setTheme.value });
-    currentTheme = setTheme.value === 'dark' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    localStorage.setItem('wcopy-theme', currentTheme);
   });
 }
 
