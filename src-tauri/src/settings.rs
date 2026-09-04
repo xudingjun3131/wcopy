@@ -14,6 +14,12 @@ pub struct WindowBounds {
     /// 不能被新方向误当成用户手动调整的值（否则切换方向会满屏展开）。
     #[serde(default)]
     pub dock: String,
+    /// 上下贴边：高度占屏幕工作区高度的比例；0 表示未记录（用默认 1/3）。
+    #[serde(default)]
+    pub height_ratio: f64,
+    /// 左右贴边：宽度占屏幕工作区宽度的比例；0 表示未记录（用默认 1/4）。
+    #[serde(default)]
+    pub width_ratio: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

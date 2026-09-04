@@ -39,6 +39,11 @@ pub struct AppState {
     pub bounds_size: Mutex<Option<(i32, i32)>>,
     /// 最近一次窗口位置（物理像素，来自 Moved 事件载荷）。
     pub bounds_pos: Mutex<Option<(i32, i32)>>,
+    /// 最近一次已知的工作区尺寸（物理像素），由 position_window 记录，
+    /// 供 Resized 事件把像素换算成屏幕占比（事件回调里禁止查 monitor，会死锁）。
+    pub area_size: Mutex<Option<(i32, i32)>>,
+    /// 最近一次尺寸对应的屏幕占比 (高度占比, 宽度占比)。
+    pub bounds_ratios: Mutex<(f64, f64)>,
     /// 上次托盘点击时间戳（ms），用于防抖，避免连发事件导致窗口闪烁。
     pub last_tray_click: Mutex<i64>,
 }
@@ -125,31 +130,33 @@ fn classify(raw: &RawClip) -> (String, Value, Option<String>, i64) {
     (item_type.to_string(), Value::String(text), html, chars)
 }
 
-/// 从 settings 一次性读出停靠方向 + 保存的窗口尺寸（不持锁返回）。
-/// 尺寸附带保存时的贴边方向，仅当方向一致时才应被 position_window 复用。
-fn dock_params(state: &AppState) -> (String, Option<(i32, i32, String)>) {
+/// 从 settings 一次性读出停靠方向 + 保存的屏幕占比（不持锁返回）。
+/// 占比附带保存时的贴边方向，仅当方向一致时才应被 position_window 复用。
+fn dock_params(state: &AppState) -> (String, Option<(String, f64, f64)>) {
     let s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
     let pos = s.data.popup_position.clone();
-    let size = s
-        .data
-        .window_bounds
-        .as_ref()
-        .map(|b| (b.width, b.height, b.dock.clone()));
-    (pos, size)
+    let ratios = s.data.window_bounds.as_ref().map(|b| {
+        (
+            b.dock.clone(),
+            b.height_ratio,
+            b.width_ratio,
+        )
+    });
+    (pos, ratios)
 }
 
 /// 将主窗口按 `pos`（left/right/top/bottom）停靠到当前屏幕工作区边缘。
-/// 只使用默认停靠尺寸，不依赖保存的 x/y，避免首次/后续打开位置不一致，
-/// 也避免在 set_settings 中调用时产生死锁（本函数不再访问 settings mutex）。
-/// `saved`：保存的窗口尺寸 (宽, 高, 保存时的贴边方向)——仅当方向与当前
-/// `pos` 一致时才复用（上下贴边只取其高度、左右贴边只取其宽度），另一维
-/// 始终占满工作区以保证贴边效果。方向不同则整体作废，防止上个方向的
-/// 「整屏宽/整屏高」被新方向误用导致满屏展开。
+/// 尺寸一律按屏幕占比计算：上下贴边默认占 1/3 屏高，左右贴边默认占 1/4 屏宽；
+/// 用户拖拽后按占比记忆（换分辨率/缩放仍成立），另一维始终占满工作区保证贴边。
+/// `saved`：保存的占比 (保存时的贴边方向, 高度占比, 宽度占比)——仅当方向与
+/// 当前 pos 一致才采用对应占比；越界（<8% 视为未拖过，>98% 视为接近满屏）作废。
+/// 不依赖保存的 x/y，避免首次/后续打开位置不一致；
+/// 不访问 settings mutex，避免在 set_settings 中调用时死锁。
 fn position_window(
     app: &tauri::AppHandle,
     win: &WebviewWindow,
     pos: &str,
-    saved_size: Option<(i32, i32, String)>,
+    saved: Option<(String, f64, f64)>,
 ) {
     let monitor = win
         .current_monitor()
@@ -160,27 +167,40 @@ fn position_window(
         Some(m) => m.work_area(),
         None => return,
     };
+    // 记录工作区尺寸，供 Resized 事件把像素换算成占比（事件回调里查 monitor 会死锁）。
+    let state = app.state::<AppState>();
+    *state
+        .area_size
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some((area.size.width as i32, area.size.height as i32));
+
     const MIN_W: i32 = 420;
     const MIN_H: i32 = 360;
-    const DEFAULT_DOCK_W: i32 = 460;
-    const DEFAULT_DOCK_H: i32 = 640;
+    const DEFAULT_H_RATIO: f64 = 1.0 / 3.0;
+    const DEFAULT_W_RATIO: f64 = 1.0 / 4.0;
 
-    // 保存的尺寸 (宽, 高, 保存时的贴边方向)：仅当方向与当前一致才复用，
-    // 且过滤掉疑似「整屏」的值（≥ 屏幕对应维 - 40px）。
-    let saved = saved_size.filter(|(_, _, d)| d == pos);
-    // 停靠面板的尺寸：上下贴边占满整宽 + 记住的高度；左右贴边记住的宽度 + 占满整高。
+    let saved = saved.filter(|(d, _, _)| d == pos);
+    // 上下贴边：整宽 + 记住的高度占比；左右贴边：记住的宽度占比 + 整高。
     let (mut w, mut h) = match pos {
         "top" | "bottom" => {
-            let sh = saved
-                .map(|(_, h, _)| h)
-                .filter(|h| *h >= MIN_H && *h < area.size.height as i32 - 40);
-            (area.size.width as i32, sh.unwrap_or(DEFAULT_DOCK_H))
+            let hr = saved
+                .map(|(_, hr, _)| hr)
+                .filter(|r| (0.08..=0.98).contains(r))
+                .unwrap_or(DEFAULT_H_RATIO);
+            (
+                area.size.width as i32,
+                (area.size.height as f64 * hr).round() as i32,
+            )
         }
         _ => {
-            let sw = saved
-                .map(|(w, _, _)| w)
-                .filter(|w| *w >= MIN_W && *w < area.size.width as i32 - 40);
-            (sw.unwrap_or(DEFAULT_DOCK_W), area.size.height as i32)
+            let wr = saved
+                .map(|(_, _, wr)| wr)
+                .filter(|r| (0.08..=0.98).contains(r))
+                .unwrap_or(DEFAULT_W_RATIO);
+            (
+                (area.size.width as f64 * wr).round() as i32,
+                area.size.height as i32,
+            )
         }
     };
     w = w.max(MIN_W).min(area.size.width as i32);
@@ -206,6 +226,15 @@ fn update_bounds_size(state: &AppState, w: i32, h: i32) {
         return;
     }
     *state.bounds_size.lock().unwrap_or_else(|e| e.into_inner()) = Some((w, h));
+    // 用 position_window 记录的工作区尺寸把像素换算成占比；
+    // 没有记录（尚未停靠过）时占比保持 0，落库后按默认占比处理。
+    if let Some((aw, ah)) = *state.area_size.lock().unwrap_or_else(|e| e.into_inner()) {
+        if aw > 0 && ah > 0 {
+            let hr = h as f64 / ah as f64;
+            let wr = w as f64 / aw as f64;
+            *state.bounds_ratios.lock().unwrap_or_else(|e| e.into_inner()) = (hr, wr);
+        }
+    }
     maybe_save_bounds(state);
 }
 
@@ -229,12 +258,15 @@ fn maybe_save_bounds(state: &AppState) {
         if w >= 50 && h >= 50 {
             {
                 let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
+                let (hr, wr) = *state.bounds_ratios.lock().unwrap_or_else(|e| e.into_inner());
                 s.data.window_bounds = Some(WindowBounds {
                     x,
                     y,
                     width: w,
                     height: h,
                     dock: s.data.popup_position.clone(),
+                    height_ratio: hr,
+                    width_ratio: wr,
                 });
                 s.data.bounds_schema = 1;
             }
@@ -608,7 +640,7 @@ fn set_settings(app: tauri::AppHandle, state: State<AppState>, patch: Value) -> 
                 let saved = data
                     .window_bounds
                     .as_ref()
-                    .map(|b| (b.width, b.height, b.dock.clone()));
+                    .map(|b| (b.dock.clone(), b.height_ratio, b.width_ratio));
                 position_window(&app, &win, &new_position, saved);
             }
         }
@@ -689,6 +721,8 @@ pub fn run() {
                 last_bounds_save: Mutex::new(0),
                 bounds_size: Mutex::new(None),
                 bounds_pos: Mutex::new(None),
+                area_size: Mutex::new(None),
+                bounds_ratios: Mutex::new((0.0, 0.0)),
                 last_tray_click: Mutex::new(0),
             });
             register_popup_shortcut(&app.handle());
