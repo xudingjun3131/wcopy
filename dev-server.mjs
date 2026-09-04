@@ -1,16 +1,17 @@
 // Tauri beforeDevCommand: assemble the frontend into ./dist (so ../assets works),
 // then serve it on :1432 with zero npm dependencies.
 import http from 'node:http';
-import { readFile, cpSync, mkdirSync, rmSync } from 'node:fs/promises';
-import { extname, join, normalize, sep } from 'node:path';
-import { dirname, fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, extname, join, normalize, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, 'dist');
 
 // Rebuild the frontend dir (mirrors beforeBuildCommand) so ../assets resolves in dev.
-await rmSync(dist, { recursive: true, force: true }).catch(() => {});
-await mkdirSync(dist, { recursive: true });
+try { rmSync(dist, { recursive: true, force: true }); } catch { /* missing ok */ }
+mkdirSync(dist, { recursive: true });
 await cpSync(join(root, 'src'), dist, { recursive: true });
 await cpSync(join(root, 'assets'), join(dist, 'assets'), { recursive: true });
 

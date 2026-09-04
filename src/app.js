@@ -119,10 +119,14 @@ let searchQuery = '';
 let activeIndex = -1;
 let currentTheme = 'light';
 let isElectron = !!(window.wcopyAPI && window.wcopyAPI.getHistory);
+// 用于轮询兜底时的“是否真的变化”快速比对，避免每次都重建 DOM 造成闪烁。
+let lastHistorySig = '';
 
 const cardGrid = document.getElementById('cardGrid');
 const searchInput = document.getElementById('searchInput');
 const searchBox = document.getElementById('searchBox');
+const searchToggle = document.getElementById('searchToggle');
+const titlebarSearch = document.getElementById('titlebarSearch');
 const filterTabs = document.getElementById('filterTabs');
 const resultCount = document.getElementById('resultCount');
 const emptyState = document.getElementById('emptyState');
@@ -372,6 +376,7 @@ async function loadHistory() {
   if (isElectron && window.wcopyAPI.getHistory) {
     try {
       history = await window.wcopyAPI.getHistory();
+      lastHistorySig = historySig(history);
       render();
     } catch (err) {
       console.error('Failed to load history:', err);
@@ -607,12 +612,36 @@ searchInput.addEventListener('input', (e) => {
   render();
 });
 
-// 搜索框常驻标题栏，Ctrl+K 直接聚焦
-function focusSearch() {
+// 搜索框默认收起；点击搜索按钮才展开，Ctrl+K 也展开。
+function expandSearch() {
+  if (titlebarSearch) titlebarSearch.classList.add('search-expanded');
   if (searchInput) {
     searchInput.focus();
     searchInput.select();
   }
+}
+
+function collapseSearch() {
+  if (searchInput && !searchInput.value.trim() && titlebarSearch) {
+    titlebarSearch.classList.remove('search-expanded');
+  }
+}
+
+if (searchToggle) {
+  searchToggle.addEventListener('click', () => {
+    if (titlebarSearch && titlebarSearch.classList.contains('search-expanded')) {
+      collapseSearch();
+    } else {
+      expandSearch();
+    }
+  });
+}
+
+searchInput.addEventListener('blur', collapseSearch);
+
+// Ctrl+K 直接聚焦（自动展开搜索框）
+function focusSearch() {
+  expandSearch();
 }
 
 filterTabs.addEventListener('click', (e) => {
@@ -762,17 +791,51 @@ document.querySelectorAll('.titlebar, .toolbar, .list-header, .statusbar').forEa
   el.style.webkitAppRegion = 'drag';
 });
 
-document.querySelectorAll('.titlebar button, .search-toggle, .search-box, .filter-tabs, .view-options, .card, .card-actions, .action-btn').forEach(el => {
+document.querySelectorAll('.titlebar button, .search-toggle, .search-box, .filter-tabs, .tab, .view-options, .view-btn, .title-count, .card, .card-actions, .action-btn').forEach(el => {
   el.style.webkitAppRegion = 'no-drag';
 });
+
+// 兜底同步：即使 Tauri 事件偶发丢失，也通过轮询 getHistory 保证 UI 反映最新剪贴板。
+// 仅在数据签名变化时才重建 DOM，避免无意义的闪烁。
+function historySig(items) {
+  return items.map(i => i.id + (i.favorite ? 'F' : '') + (i.pinned ? 'P' : '')).join('|');
+}
+
+async function syncHistory() {
+  if (!(isElectron && window.wcopyAPI && window.wcopyAPI.getHistory)) return;
+  try {
+    const items = await window.wcopyAPI.getHistory();
+    const sig = historySig(items);
+    if (sig !== lastHistorySig) {
+      lastHistorySig = sig;
+      history = items;
+      render();
+    }
+  } catch (err) {
+    console.error('syncHistory failed:', err);
+  }
+}
 
 // Subscribe to real-time updates from main process
 if (isElectron && window.wcopyAPI.onHistoryUpdated) {
   window.wcopyAPI.onHistoryUpdated((updated) => {
+    lastHistorySig = historySig(updated);
     history = updated;
     render();
   });
 }
+
+// 窗口获得焦点 / 显示时立即同步一次（弹出剪贴板面板时拿到最新内容）。
+if (isElectron && window.__TAURI__ && window.__TAURI__.window) {
+  try {
+    const win = window.__TAURI__.window.getCurrentWindow();
+    win.listen('focus', () => syncHistory());
+    win.listen('show', () => syncHistory());
+  } catch (_) { /* 忽略 */ }
+}
+
+// 轮询兜底：每 600ms 拉取一次，保证实时性不依赖事件通道。
+setInterval(syncHistory, 600);
 
 // Init
 initTheme();

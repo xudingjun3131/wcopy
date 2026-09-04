@@ -68,11 +68,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 10px;
   background: var(--titlebar-bg);
   backdrop-filter: blur(20px);
   border-bottom: none;
   -webkit-app-region: drag;
+  overflow: hidden;
 }
 
 .titlebar-left,
@@ -85,10 +87,11 @@ body {
 }
 
 .titlebar-search {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  padding: 0 8px;
   -webkit-app-region: no-drag;
 }
 
@@ -171,8 +174,8 @@ body {
 }
 
 .search-toggle {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -193,15 +196,31 @@ body {
 .search-box {
   position: relative;
   display: flex;
-  width: 100%;
-  min-width: 0;
+  align-items: center;
   height: 30px;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  align-items: center;
+  pointer-events: none;
+  transition: width 0.2s ease, opacity 0.2s ease, padding 0.2s ease;
+}
+
+.titlebar-search.search-expanded .search-box {
+  width: 200px;
+  opacity: 1;
   padding: 0 10px;
-  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.titlebar-search.search-expanded .search-toggle {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .search-box:focus-within {
@@ -231,10 +250,10 @@ body {
 
 .filter-tabs {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 60px;
   scrollbar-width: none;
 }
 
@@ -302,7 +321,7 @@ body {
 .view-options {
   display: flex;
   gap: 4px;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .view-btn {

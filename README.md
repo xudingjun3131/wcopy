@@ -5,42 +5,56 @@
 ## 功能特性
 
 - **真实剪贴板监听**：每 500ms 轮询，自动记录文本、代码、图片、文件、链接、富文本
-- **来源识别**：Windows 下通过 PowerShell 获取前台窗口进程名，映射为常见应用名称和图标
-- **搜索筛选**：顶部搜索框 + 分类标签快速定位
-- **一键回写**：点击卡片即可写回剪贴板
+- **来源识别**：Windows 下通过 Win32 API 获取前台窗口进程名，映射为常见应用名称和图标
+- **搜索筛选**：标题栏同一行内置筛选标签 + 可收起搜索框，快速定位
+- **一键回写 / 双击粘贴**：单击卡片复制回剪贴板；双击卡片复制并粘贴回唤起前的原输入窗口
 - **快捷键唤起**：默认 `Ctrl + Shift + V`
-- **系统托盘**：常驻后台，支持快速粘贴最近 5 条
+- **系统托盘**：常驻后台，支持托盘快速呼出
 - **深色/浅色主题**：跟随系统或手动切换
 - **Windows 风格**：Fluent Design 圆角、亚克力标题栏
-- **本地持久化**：历史记录保存到 `userData/history.json`，最多保留 200 条
+- **本地持久化**：历史记录保存到 `AppData/com.itgank.wcopy/history.json`，最多保留 200 条
 - **设置面板**：开机自启、最大历史条数、默认主题、清除时保留收藏
 
 ## 项目结构
 
 ```
 wcopy/
-├── assets/          # 图标资源
-├── docs/
-│   └── design.md    # 产品/UI 设计文档
-├── src/
-│   ├── main.js      # Electron 主进程
-│   ├── preload.js   # 安全预加载脚本
-│   ├── index.html   # 渲染页面
-│   ├── styles.css   # Windows 风格样式
-│   └── app.js       # 界面交互逻辑
+├── assets/                       # 图标资源与生成脚本
+├── src/                          # 前端
+│   ├── index.html                # 渲染页面
+│   ├── styles.css                # Windows Fluent 风格样式
+│   ├── app.js                    # 界面交互逻辑
+│   └── wcopy-api.js              # Tauri IPC 桥接
+├── src-tauri/                    # Rust + Tauri 后端
+│   ├── src/
+│   │   ├── lib.rs                # Tauri 入口、捕获循环、窗口管理
+│   │   ├── clipboard.rs          # 剪贴板读写
+│   │   ├── store.rs              # JSON 持久化
+│   │   ├── settings.rs           # 设置持久化
+│   │   └── win.rs                # Windows 专属前台窗口 / Ctrl+V
+│   ├── Cargo.toml
+│   └── tauri.conf.json
 ├── package.json
 └── README.md
 ```
 
 ## 开发运行
 
-在 Windows 上安装依赖：
+### 依赖
+
+- Node.js 22+
+- Rust / cargo
 
 ```bash
 cd wcopy
 npm install
-npm start
+cd src-tauri
+cargo fetch
+cd ..
+npm run dev          # 启动 Tauri 开发模式
 ```
+
+在 macOS 上只能做前端 / Rust 编译验证；真机剪贴板相关功能（如进程名识别、Ctrl+V 粘贴）需要在 Windows 下测试。
 
 ## 打包 Windows 安装包
 
@@ -109,6 +123,15 @@ npm run build:win
 | `↑ / ↓` | 切换选中卡片 |
 | `Enter` | 回写当前选中项并隐藏 |
 | `Ctrl + D` | 删除当前选中项 |
+
+## 最近更新
+
+### v1.1.3
+
+- **修复 / 健壮性：剪贴板捕获线程** — 后端捕获循环加入 `catch_unwind` 保护，单次异常（如 Windows 剪贴板锁竞争）不会导致线程永久死亡；所有 Mutex 锁改为中毒恢复，避免某处 panic 后整把锁不可用。
+- **修复：前端兜底同步** — 即使 `history-updated` 事件偶发丢失，也通过 600ms 轮询 `getHistory` 让 UI 始终与持久化 store 保持一致，仅在数据变化时重渲染。
+- **UI 改版：筛选与搜索同处标题栏** — 全部 / 文本 / 图片 / 文件 / 链接 / 收藏 六个筛选 tab 与搜索框放在同一行；搜索框默认收起，点击搜索按钮才展开，Ctrl+K 也会自动展开。
+- **开发服务器修复** — 修正 `dev-server.mjs` 的 `node:fs/promises` / `node:path` / `rmSync` 用法，Tauri dev 可正常启动。
 
 ## 后续 roadmap
 

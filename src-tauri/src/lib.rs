@@ -134,7 +134,7 @@ fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str, force
         None => return,
     };
     let state = app.state::<AppState>();
-    let saved: Option<WindowBounds> = state.settings.lock().unwrap().data.window_bounds.clone();
+    let saved: Option<WindowBounds> = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.window_bounds.clone();
     const MIN_W: i32 = 420;
     const MIN_H: i32 = 360;
 
@@ -183,34 +183,34 @@ fn update_bounds_size(state: &AppState, w: i32, h: i32) {
     if w < 50 || h < 50 {
         return;
     }
-    *state.bounds_size.lock().unwrap() = Some((w, h));
+    *state.bounds_size.lock().unwrap_or_else(|e| e.into_inner()) = Some((w, h));
     maybe_save_bounds(state);
 }
 
 fn update_bounds_pos(state: &AppState, x: i32, y: i32) {
-    *state.bounds_pos.lock().unwrap() = Some((x, y));
+    *state.bounds_pos.lock().unwrap_or_else(|e| e.into_inner()) = Some((x, y));
     maybe_save_bounds(state);
 }
 
 /// 合并最近一次尺寸与位置，节流（250ms）写盘；二者齐全才落库。
 fn maybe_save_bounds(state: &AppState) {
     let now = now_ms();
-    let mut last = state.last_bounds_save.lock().unwrap();
+    let mut last = state.last_bounds_save.lock().unwrap_or_else(|e| e.into_inner());
     if now - *last <= 250 {
         return;
     }
     *last = now;
     drop(last);
-    let sz = *state.bounds_size.lock().unwrap();
-    let pz = *state.bounds_pos.lock().unwrap();
+    let sz = *state.bounds_size.lock().unwrap_or_else(|e| e.into_inner());
+    let pz = *state.bounds_pos.lock().unwrap_or_else(|e| e.into_inner());
     if let (Some((w, h)), Some((x, y))) = (sz, pz) {
         if w >= 50 && h >= 50 {
             {
-                let mut s = state.settings.lock().unwrap();
+                let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
                 s.data.window_bounds = Some(WindowBounds { x, y, width: w, height: h });
                 s.data.bounds_schema = 1;
             }
-            state.settings.lock().unwrap().save();
+            state.settings.lock().unwrap_or_else(|e| e.into_inner()).save();
         }
     }
 }
@@ -223,16 +223,16 @@ fn toggle_popup(app: &tauri::AppHandle, state: &AppState) {
         }
         #[cfg(windows)]
         {
-            *state.target_hwnd.lock().unwrap() = win::get_foreground_window();
+            *state.target_hwnd.lock().unwrap_or_else(|e| e.into_inner()) = win::get_foreground_window();
         }
-        let pos = state.settings.lock().unwrap().data.popup_position.clone();
+        let pos = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
         position_window(app, &win, &pos, false);
         let _ = win.show();
     }
 }
 
 fn emit_history(app: &tauri::AppHandle, state: &AppState) {
-    let items = state.store.lock().unwrap().items.clone();
+    let items = state.store.lock().unwrap_or_else(|e| e.into_inner()).items.clone();
     let _ = app.emit("history-updated", items);
 }
 
@@ -262,7 +262,7 @@ fn capture_tick(app: &tauri::AppHandle) {
     let hash = store::Store::hash(&hash_src);
     let state = app.state::<AppState>();
     {
-        let lh = state.last_hash.lock().unwrap();
+        let lh = state.last_hash.lock().unwrap_or_else(|e| e.into_inner());
         if *lh == hash {
             return;
         }
@@ -287,8 +287,8 @@ fn capture_tick(app: &tauri::AppHandle) {
         pinned: false,
         hash: hash.clone(),
     };
-    state.store.lock().unwrap().add(item);
-    *state.last_hash.lock().unwrap() = hash;
+    state.store.lock().unwrap_or_else(|e| e.into_inner()).add(item);
+    *state.last_hash.lock().unwrap_or_else(|e| e.into_inner()) = hash;
     emit_history(app, &state);
 }
 
@@ -389,7 +389,7 @@ fn register_popup_shortcut(app: &tauri::AppHandle) {
         let _ = gs.on_shortcut(sc, |app, _sc, event| {
             if event.state == ShortcutState::Pressed {
                 let state = app.state::<AppState>();
-                let capture = *state.capture_active.lock().unwrap();
+                let capture = *state.capture_active.lock().unwrap_or_else(|e| e.into_inner());
                 if capture {
                     return;
                 }
@@ -415,7 +415,7 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 if let Some(w) = app.get_webview_window("main") {
-                    let pos = app.state::<AppState>().settings.lock().unwrap().data.popup_position.clone();
+                    let pos = app.state::<AppState>().settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
                     position_window(app, &w, &pos, false);
                     let _ = w.show();
                     let _ = w.set_focus();
@@ -439,30 +439,30 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[tauri::command]
 fn get_history(state: State<AppState>) -> Vec<ClipItem> {
-    state.store.lock().unwrap().items.clone()
+    state.store.lock().unwrap_or_else(|e| e.into_inner()).items.clone()
 }
 
 #[tauri::command]
 fn delete_item(app: tauri::AppHandle, state: State<AppState>, id: String) {
-    state.store.lock().unwrap().delete(&id);
+    state.store.lock().unwrap_or_else(|e| e.into_inner()).delete(&id);
     emit_history(&app, &state);
 }
 
 #[tauri::command]
 fn toggle_favorite(app: tauri::AppHandle, state: State<AppState>, id: String) {
-    state.store.lock().unwrap().toggle_favorite(&id);
+    state.store.lock().unwrap_or_else(|e| e.into_inner()).toggle_favorite(&id);
     emit_history(&app, &state);
 }
 
 #[tauri::command]
 fn toggle_pin(app: tauri::AppHandle, state: State<AppState>, id: String) {
-    state.store.lock().unwrap().toggle_pin(&id);
+    state.store.lock().unwrap_or_else(|e| e.into_inner()).toggle_pin(&id);
     emit_history(&app, &state);
 }
 
 #[tauri::command]
 fn clear_history(app: tauri::AppHandle, state: State<AppState>) {
-    state.store.lock().unwrap().clear();
+    state.store.lock().unwrap_or_else(|e| e.into_inner()).clear();
     emit_history(&app, &state);
 }
 
@@ -493,7 +493,7 @@ fn paste_item(app: tauri::AppHandle, state: State<AppState>, id: String) -> bool
     }
     #[cfg(windows)]
     {
-        let hwnd = *state.target_hwnd.lock().unwrap();
+        let hwnd = *state.target_hwnd.lock().unwrap_or_else(|e| e.into_inner());
         if hwnd != 0 {
             win::send_ctrl_v(hwnd);
         }
@@ -503,12 +503,12 @@ fn paste_item(app: tauri::AppHandle, state: State<AppState>, id: String) -> bool
 
 #[tauri::command]
 fn get_settings(state: State<AppState>) -> Settings {
-    state.settings.lock().unwrap().data.clone()
+    state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.clone()
 }
 
 #[tauri::command]
 fn set_settings(app: tauri::AppHandle, state: State<AppState>, patch: Value) -> Settings {
-    let mut s = state.settings.lock().unwrap();
+    let mut s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(v) = patch.get("launchAtLogin").and_then(|v| v.as_bool()) {
         s.data.launch_at_login = v;
     }
@@ -538,7 +538,7 @@ fn set_settings(app: tauri::AppHandle, state: State<AppState>, patch: Value) -> 
     }
     if patch.get("maxItems").is_some() {
         let new_max = s.data.max_items.max(1) as usize;
-        let mut store = state.store.lock().unwrap();
+        let mut store = state.store.lock().unwrap_or_else(|e| e.into_inner());
         store.max_items = new_max;
         store.enforce_max_items();
     }
@@ -630,7 +630,7 @@ pub fn run() {
             build_tray(app)?;
             {
                 let state = app.state::<AppState>();
-                let s = state.settings.lock().unwrap();
+                let s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
                 if s.data.launch_at_login {
                     let _ = app.autolaunch().enable();
                 }
@@ -638,7 +638,12 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(Duration::from_millis(500));
-                capture_tick(&handle);
+                let h = handle.clone();
+                // 捕获线程必须永不因单次异常而退出，否则剪贴板将永久停止更新。
+                // 用 catch_unwind 兜住任意 panic；配合下方中毒锁恢复，保证线程常驻。
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    capture_tick(&h);
+                }));
             });
             Ok(())
         })
@@ -664,7 +669,7 @@ pub fn run() {
                     let _ = window.hide();
                     // 关闭前确保最新尺寸已落盘。
                     let state = window.state::<AppState>();
-                    state.settings.lock().unwrap().save();
+                    state.settings.lock().unwrap_or_else(|e| e.into_inner()).save();
                 }
                 WindowEvent::Resized(size) => {
                     let state = window.state::<AppState>();

@@ -8,7 +8,7 @@
 </head>
 <body data-page-node-id="jNcSKnUFjF26wfqatQsP0s">
   <div class="app" data-page-node-id="6PGy7zW6B0tZWCCfS6kxWk">
-    <!-- 标题栏：logo + 搜索框 + 窗口按钮（搜索整体上提，紧贴标题） -->
+    <!-- 标题栏：logo + 筛选 tab（全部/文本/图片/文件/链接/收藏）+ 搜索（默认收起，点击搜索按钮展开）+ 视图 + 窗口按钮，全部同一行 -->
     <div class="titlebar">
       <div class="titlebar-left">
         <div class="logo">
@@ -16,7 +16,21 @@
           <span>wcopy</span>
         </div>
       </div>
-      <div class="titlebar-search">
+      <div class="filter-tabs" id="filterTabs">
+        <button class="tab active" data-type="all">全部</button>
+        <button class="tab" data-type="text">文本</button>
+        <button class="tab" data-type="image">图片</button>
+        <button class="tab" data-type="file">文件</button>
+        <button class="tab" data-type="link">链接</button>
+        <button class="tab" data-type="favorite">收藏</button>
+      </div>
+      <div class="titlebar-search" id="titlebarSearch">
+        <button class="search-toggle" id="searchToggle" title="搜索">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+        </button>
         <div class="search-box" id="searchBox">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/>
@@ -26,6 +40,23 @@
         </div>
       </div>
       <div class="titlebar-right">
+        <div class="view-options">
+          <button class="view-btn active" title="网格视图">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
+          <button class="view-btn" title="列表视图">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+        </div>
         <span class="title-count" id="resultCount">加载中...</span>
         <button class="window-btn settings-toggle" id="settingsBtn" title="设置">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -41,35 +72,6 @@
         </button>
         <button class="window-btn minimize" id="minimizeBtn" title="最小化">—</button>
         <button class="window-btn close" id="closeBtn" title="关闭">✕</button>
-      </div>
-    </div>
-
-    <!-- 筛选条：紧贴标题栏下方，不再留空 -->
-    <div class="toolbar">
-      <div class="filter-tabs" id="filterTabs">
-        <button class="tab active" data-type="all">全部</button>
-        <button class="tab" data-type="text">文本</button>
-        <button class="tab" data-type="image">图片</button>
-        <button class="tab" data-type="file">文件</button>
-        <button class="tab" data-type="link">链接</button>
-        <button class="tab" data-type="favorite">收藏</button>
-      </div>
-      <div class="view-options">
-        <button class="view-btn active" title="网格视图">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-        </button>
-        <button class="view-btn" title="列表视图">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <line x1="3" y1="12" x2="21" y2="12"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-        </button>
       </div>
     </div>
 
