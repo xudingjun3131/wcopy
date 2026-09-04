@@ -131,6 +131,7 @@ const filterTabs = document.getElementById('filterTabs');
 const resultCount = document.getElementById('resultCount');
 const emptyState = document.getElementById('emptyState');
 const statusText = document.getElementById('statusText');
+const backendBadge = document.getElementById('backendBadge');
 const themeToggle = document.getElementById('themeToggle');
 const minimizeBtn = document.getElementById('minimizeBtn');
 const closeBtn = document.getElementById('closeBtn');
@@ -378,6 +379,7 @@ async function loadHistory() {
       history = await window.wcopyAPI.getHistory();
       lastHistorySig = historySig(history);
       render();
+      updateBackendBadge();
     } catch (err) {
       console.error('Failed to load history:', err);
       statusText.textContent = '加载历史失败';
@@ -385,7 +387,28 @@ async function loadHistory() {
   } else {
     history = [...fallbackData];
     statusText.textContent = '浏览器预览模式：使用模拟数据';
+    updateBackendBadge();
   }
+}
+
+// 状态栏后端/捕获健康指示，用于真机问题定位。
+function updateBackendBadge() {
+  if (!backendBadge) return;
+  if (!isElectron) {
+    backendBadge.textContent = '⚠ 演示模式（未连接本地后端）';
+    backendBadge.classList.add('warn');
+    return;
+  }
+  backendBadge.classList.remove('warn');
+  const n = history.length;
+  if (n === 0) {
+    backendBadge.textContent = '✓ 已连接 · 暂无记录';
+    return;
+  }
+  const newest = history[0];
+  const ageMin = Math.max(0, Math.floor((Date.now() - newest.time) / 60000));
+  const age = ageMin < 1 ? '刚刚' : `${ageMin} 分钟前`;
+  backendBadge.textContent = `✓ 已连接 · 最近捕获 ${age} · 共 ${n} 条`;
 }
 
 function displayAccel(accel) {
@@ -810,6 +833,7 @@ async function syncHistory() {
       lastHistorySig = sig;
       history = items;
       render();
+      updateBackendBadge();
     }
   } catch (err) {
     console.error('syncHistory failed:', err);
@@ -822,6 +846,7 @@ if (isElectron && window.wcopyAPI.onHistoryUpdated) {
     lastHistorySig = historySig(updated);
     history = updated;
     render();
+    updateBackendBadge();
   });
 }
 

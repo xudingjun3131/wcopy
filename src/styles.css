@@ -621,6 +621,16 @@ body {
   color: var(--text-tertiary);
 }
 
+.backend-badge {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-right: auto;
+}
+
+.backend-badge.warn {
+  color: #C42B1C;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
