@@ -239,7 +239,7 @@ function createCard(item, index) {
       <div class="card-actions">
         <button class="action-btn pin ${item.pinned ? 'pinned' : ''}" title="置顶">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2v12M5 12l7 7 7-7"/>
+            <path d="M12 22V10M5 10l7-7 7 7"/>
           </svg>
         </button>
         <button class="action-btn favorite ${item.favorite ? 'favorited' : ''}" title="收藏">

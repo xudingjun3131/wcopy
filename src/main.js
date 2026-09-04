@@ -31,6 +31,15 @@ function captureTargetHwnd() {
   }
 }
 
+let psWarmed = false;
+// 预热 PowerShell：它冷启动通常要 1 秒以上，等它起来时焦点早已变化，粘贴就失败了。
+// 弹窗首次显示后先跑一次空命令把映像缓存起来，后续调用会快很多。
+function warmupPowershell() {
+  if (psWarmed || process.platform !== 'win32') return;
+  psWarmed = true;
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', 'exit'], () => {});
+}
+
 const isDev = process.env.NODE_ENV === 'development';
 
 const APP_MAP = {
@@ -419,6 +428,7 @@ function toggleWindow() {
   // 鼠标事件仍能被弹窗接收，双击/Enter 粘贴时隐藏弹窗，焦点自然回退到原应用
   mainWindow.showInactive();
   opening = false;
+  warmupPowershell();
 }
 
 function registerShortcuts() {
@@ -493,6 +503,8 @@ ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
 // 还给原应用，否则 Ctrl+V 会发到 wcopy 自己。Windows 的 SetForegroundWindow 有“前台锁”限制，
 // 后台进程直接调用会被拒绝；用 AttachThreadInput 把 PowerShell 线程附着到当前前台线程（拥有前台
 // 权限）后，SetForegroundWindow 才能可靠把焦点还给原应用，再发 Ctrl+V。
+// 粘贴按键部分：用 keybd_event 直接发 Ctrl+V，比 SendKeys.SendWait 更底层、更可控。
+// VK_CONTROL=0x11, 'V'=0x56, KEYEVENTF_KEYUP=0x0002
 const PASTE_PS_TEMPLATE = `
 Add-Type @"
 using System;
@@ -505,44 +517,75 @@ public class W32 {
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
   [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 }
 "@
 $hwnd = [IntPtr]::Parse("__HWND__")
-$fore = [W32]::GetForegroundWindow()
-$foreThread = [W32]::GetWindowThreadProcessId($fore, [ref][uint32]0)
-$self = [W32]::GetCurrentThreadId()
-[W32]::AttachThreadInput($foreThread, $self, $true)
 if ([W32]::IsIconic($hwnd)) { [W32]::ShowWindow($hwnd, 9) }   # SW_RESTORE
-[W32]::SetForegroundWindow($hwnd)
-[W32]::AttachThreadInput($foreThread, $self, $false)
-Start-Sleep -Milliseconds 60
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.SendKeys]::SendWait("^v")
+$fore = [W32]::GetForegroundWindow()
+if ($fore -ne $hwnd) {
+  # 附着到当前前台线程以获取前台权限，否则 SetForegroundWindow 会被前台锁拒绝
+  $ft = [W32]::GetWindowThreadProcessId($fore, [ref][uint32]0)
+  $self = [W32]::GetCurrentThreadId()
+  [W32]::AttachThreadInput($ft, $self, $true)
+  [W32]::SetForegroundWindow($hwnd)
+  [W32]::AttachThreadInput($ft, $self, $false)
+} else {
+  [W32]::SetForegroundWindow($hwnd)
+}
+Start-Sleep -Milliseconds 100
+[W32]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 20
+[W32]::keybd_event(0x56, 0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 20
+[W32]::keybd_event(0x56, 0, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 20
+[W32]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
 `;
+
+// 未记录到原应用句柄时的兜底：只发 Ctrl+V 给当前前台窗口
+const PASTE_FALLBACK_PS = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class W32 {
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+}
+"@
+Start-Sleep -Milliseconds 80
+[W32]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 20
+[W32]::keybd_event(0x56, 0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 20
+[W32]::keybd_event(0x56, 0, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 20
+[W32]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+`;
+
+// 判断记录的句柄是否是 wcopy 自己的窗口（避免把焦点还给 wcopy 本身）
+function isSelfHwnd(hwnd) {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    const h = mainWindow.getNativeWindowHandle();
+    if (!h) return false;
+    return h.readBigUInt64LE().toString() === String(hwnd);
+  } catch (e) {
+    return false;
+  }
+}
+
+// 复制并粘贴：写入剪贴板 ->（Windows）先隐藏弹窗让焦点自然回退 -> 强制把焦点还给原应用 -> 发 Ctrl+V
 ipcMain.handle('paste-item', async (event, id) => {
   const ok = await writeItemToClipboard(id);
   if (!ok) return false;
   if (process.platform === 'win32') {
-    const hwnd = targetHwnd;
-    if (hwnd && hwnd !== '0') {
-      // 把焦点还给原应用（如记事本），再发 Ctrl+V，最后隐藏弹窗
-      const ps = PASTE_PS_TEMPLATE.replace('__HWND__', hwnd);
-      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
-        if (err) console.error('paste-item SendKeys failed:', err);
-      });
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        setTimeout(() => mainWindow.hide(), 200);
-      }
-    } else {
-      // 未记录到原窗口句柄：隐藏弹窗让焦点回退，再兜底发 Ctrl+V 到当前前台
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
-      setTimeout(() => {
-        const ps = 'Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 40; [System.Windows.Forms.SendKeys]::SendWait("^v")';
-        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], (err) => {
-          if (err) console.error('paste-item SendKeys failed:', err);
-        });
-      }, 120);
-    }
+    // 先隐藏弹窗：焦点自然回退到原应用，避免 wcopy 抢焦点导致 Ctrl+V 发给自己
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+    const hwnd = (targetHwnd && targetHwnd !== '0' && !isSelfHwnd(targetHwnd)) ? targetHwnd : null;
+    const ps = hwnd ? PASTE_PS_TEMPLATE.replace('__HWND__', hwnd) : PASTE_FALLBACK_PS;
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ps], (err) => {
+      if (err) console.error('paste-item paste failed:', err);
+    });
   } else {
     // 非 Windows：写入剪贴板后仅复制，然后关闭弹窗
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();

@@ -1,6 +1,6 @@
 {
   "name": "wcopy",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "A Windows clipboard history manager inspired by iCopy",
   "main": "src/main.js",
   "scripts": {
