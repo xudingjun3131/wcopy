@@ -55,6 +55,18 @@ jobs:
           set -o pipefail
           npx tauri build 2>&1 | tee build.log
 
+      - name: Rename installers
+        if: success()
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NSIS_DIR="src-tauri/target/release/bundle/nsis"
+          MSI_DIR="src-tauri/target/release/bundle/msi"
+          shopt -s nullglob
+          for f in "$NSIS_DIR"/*-setup.exe; do mv "$f" "$NSIS_DIR/wcopy_${VERSION}.exe"; done
+          for f in "$MSI_DIR"/*en-US.msi; do mv "$f" "$MSI_DIR/wcopy_${VERSION}.msi"; done
+          echo "=== renamed ===" && ls -la "$NSIS_DIR" "$MSI_DIR"
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,6 +98,18 @@ jobs:
             ls -la src-tauri/target/release/bundle/msi 2>/dev/null || true
           } > release_notes.md
           cat release_notes.md
+
+      - name: Remove stale installer assets
+        if: success()
+        shell: bash
+        run: |
+          API="https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}"
+          TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          ids=$(curl -s -H "Authorization: Bearer $TOKEN" "$API" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d);const ids=(j.assets||[]).filter(a=>/-setup\.exe$/.test(a.name)||/en-US\.msi$/.test(a.name)).map(a=>a.id);console.log(ids.join(' '))}catch(e){console.log('')}}))")
+          for id in $ids; do
+            echo "deleting stale asset $id"
+            curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/assets/$id"
+          done
 
       - name: Upload to GitHub Release
         if: success()
