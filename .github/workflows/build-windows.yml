@@ -83,7 +83,7 @@ jobs:
             echo
             echo '## bundle artifacts:'
             ls -la src-tauri/target/release/bundle/nsis 2>/dev/null || true
-            ls -la src-tauri/target/release/bundle/wix 2>/dev/null || true
+            ls -la src-tauri/target/release/bundle/msi 2>/dev/null || true
           } > release_notes.md
           cat release_notes.md
 
@@ -96,9 +96,8 @@ jobs:
           body_path: release_notes.md
           overwrite: true
           files: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/wix/*.msi
-            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/wcopy_*.exe
+            src-tauri/target/release/bundle/msi/wcopy_*.msi
             src-tauri/target/release/bundle/**/*.sig
           fail_on_unmatched_files: false
         env:

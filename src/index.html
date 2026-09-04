@@ -8,72 +8,66 @@
 </head>
 <body data-page-node-id="jNcSKnUFjF26wfqatQsP0s">
   <div class="app" data-page-node-id="6PGy7zW6B0tZWCCfS6kxWk">
-    <!-- 自定义标题栏 -->
-    <div class="titlebar" data-page-node-id="5YPB2EzrXBz30mtFCAzYmZ">
-      <div class="titlebar-left" data-page-node-id="jCWmD4bLbK1HXeF6uUDak6">
-        <div class="logo" data-page-node-id="VAuZRkFkx9uPBYFT58sDSJ">
-          <img src="assets/logo.png" alt="wcopy" width="20" height="20" class="logo-img" data-page-node-id="Y1P1geePbsUAnGcl8Pijxd">
-          <span data-page-node-id="Q6kihiI76TFXA55QV1l7pD">wcopy</span>
+    <!-- 标题栏：logo + 搜索框 + 窗口按钮（搜索整体上提，紧贴标题） -->
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="logo">
+          <img src="assets/logo.png" alt="wcopy" width="20" height="20" class="logo-img">
+          <span>wcopy</span>
         </div>
       </div>
-      <div class="titlebar-center" data-page-node-id="OHm30zT8KSHuaQOAj7GBdk">剪贴板历史</div>
-      <div class="titlebar-right" data-page-node-id="lxesE7aiwHcllQAFhdhrWv">
-        <span class="title-count" id="resultCount" data-page-node-id="lo5sfWDVXoDeD2fXCCl1Nz">加载中...</span>
+      <div class="titlebar-search">
+        <div class="search-box" id="searchBox">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" id="searchInput" placeholder="搜索剪贴板历史...  (Ctrl+K)" autocomplete="off">
+        </div>
+      </div>
+      <div class="titlebar-right">
+        <span class="title-count" id="resultCount">加载中...</span>
         <button class="window-btn settings-toggle" id="settingsBtn" title="设置">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </button>
-        <button class="window-btn theme-toggle" id="themeToggle" title="切换主题" data-page-node-id="Ywot7Kh2Jke7pKrOoVXsrf">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="WVz2D8KjkMs4FFXJrQCyNS">
-            <circle cx="12" cy="12" r="5" data-page-node-id="KGKSh3IbCuuoCHoJIZVGYW"/>
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" data-page-node-id="m1AXDIvKv2VqJTiG8gFHMd"/>
+        <button class="window-btn theme-toggle" id="themeToggle" title="切换主题">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
           </svg>
         </button>
-        <button class="window-btn minimize" id="minimizeBtn" title="最小化" data-page-node-id="BGbNQc9TDWCkF2mXyRs68M">—</button>
-        <button class="window-btn close" id="closeBtn" title="关闭" data-page-node-id="dN7xxtPHR4WtolowaD9XIG">✕</button>
+        <button class="window-btn minimize" id="minimizeBtn" title="最小化">—</button>
+        <button class="window-btn close" id="closeBtn" title="关闭">✕</button>
       </div>
     </div>
 
-    <!-- 搜索与筛选：合并为一排，搜索默认折叠为按钮 -->
-    <div class="toolbar" data-page-node-id="579pEHm4Y9FLtCp8RIhSdb">
-      <button class="search-toggle" id="searchToggle" title="搜索 (Ctrl+K)" data-page-node-id="m5d1ksEcd8EAwznxLs13eR">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="sg1">
-          <circle cx="11" cy="11" r="8" data-page-node-id="sg2"/>
-          <path d="M21 21l-4.35-4.35" data-page-node-id="sg3"/>
-        </svg>
-      </button>
-      <div class="search-box" id="searchBox" data-page-node-id="vZToUw51fDuQ2vEdz2MHwa">
-        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="m5d1ksEcd8EAwznxLs13eR">
-          <circle cx="11" cy="11" r="8" data-page-node-id="ChGCRU8WiDk3woa2VTzgNq"/>
-          <path d="M21 21l-4.35-4.35" data-page-node-id="TeOMZHb38sZTqJkm2HIb8L"/>
-        </svg>
-        <input type="text" id="searchInput" placeholder="搜索剪贴板历史..." autocomplete="off" data-page-node-id="JrJSG9ce5cP09PrCwEcxmV">
-        <span class="search-shortcut" data-page-node-id="IhPmGoE8JrGfhEKRs90e7E">Ctrl+K</span>
+    <!-- 筛选条：紧贴标题栏下方，不再留空 -->
+    <div class="toolbar">
+      <div class="filter-tabs" id="filterTabs">
+        <button class="tab active" data-type="all">全部</button>
+        <button class="tab" data-type="text">文本</button>
+        <button class="tab" data-type="image">图片</button>
+        <button class="tab" data-type="file">文件</button>
+        <button class="tab" data-type="link">链接</button>
+        <button class="tab" data-type="favorite">收藏</button>
       </div>
-      <div class="filter-tabs" id="filterTabs" data-page-node-id="v2fNvzr97oqksB5fIFLeo8">
-        <button class="tab active" data-type="all" data-page-node-id="b2A6XStncweK6xA5zoVW6S">全部</button>
-        <button class="tab" data-type="text" data-page-node-id="cade9AwT10DWb3B7b1yhs8">文本</button>
-        <button class="tab" data-type="image" data-page-node-id="Tavf7zBjEA6fUBY30r2sFq">图片</button>
-        <button class="tab" data-type="file" data-page-node-id="MnRHVywiXjoihwbTBzOmAM">文件</button>
-        <button class="tab" data-type="link" data-page-node-id="obNLR4aZ1HQzf6hwfizMxa">链接</button>
-        <button class="tab" data-type="favorite" data-page-node-id="W0Fy4QlNwq4DwMTInHEYkz">收藏</button>
-      </div>
-      <div class="view-options" data-page-node-id="pqmhtRr0BQ8CFDlbh4gwNL">
-        <button class="view-btn active" title="网格视图" data-page-node-id="BvEXRQi400bDZRbZY37LDn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="fLjSdPpacBB1yq51x5WV9Q">
-            <rect x="3" y="3" width="7" height="7" rx="1" data-page-node-id="oYsm4WQEqH16l5UOzgZnp7"/>
-            <rect x="14" y="3" width="7" height="7" rx="1" data-page-node-id="pF2qjLw0TYx5r0L83bU0Hy"/>
-            <rect x="3" y="14" width="7" height="7" rx="1" data-page-node-id="iiJDPpIFEm3L8EwRqM6hxs"/>
-            <rect x="14" y="14" width="7" height="7" rx="1" data-page-node-id="tzEkUnBkgrMTCGEYYmyaUZ"/>
+      <div class="view-options">
+        <button class="view-btn active" title="网格视图">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
           </svg>
         </button>
-        <button class="view-btn" title="列表视图" data-page-node-id="tiGiESQyALsDtnBgKl1IKA">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-page-node-id="JAh8U6vLTrmHEb9CYQfXG9">
-            <line x1="3" y1="6" x2="21" y2="6" data-page-node-id="aWmaLZE5BOXKNc23RUCRrz"/>
-            <line x1="3" y1="12" x2="21" y2="12" data-page-node-id="FOhKPwHWcOCbKxF8Do1yW5"/>
-            <line x1="3" y1="18" x2="21" y2="18" data-page-node-id="e2xsE48EaLizdqgdYcx8Qh"/>
+        <button class="view-btn" title="列表视图">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
       </div>

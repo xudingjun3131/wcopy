@@ -528,6 +528,14 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // 第二次启动时不要把实例拉起来，而是把已存在的窗口提到最前。
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir).ok();

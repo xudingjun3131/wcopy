@@ -122,7 +122,6 @@ let isElectron = !!(window.wcopyAPI && window.wcopyAPI.getHistory);
 
 const cardGrid = document.getElementById('cardGrid');
 const searchInput = document.getElementById('searchInput');
-const searchToggle = document.getElementById('searchToggle');
 const searchBox = document.getElementById('searchBox');
 const filterTabs = document.getElementById('filterTabs');
 const resultCount = document.getElementById('resultCount');
@@ -608,19 +607,12 @@ searchInput.addEventListener('input', (e) => {
   render();
 });
 
-// 搜索框默认折叠为按钮，点击或 Ctrl+K 展开
-function expandSearch() {
-  if (searchBox) searchBox.classList.add('expanded');
-}
-function collapseSearch() {
-  if (searchBox) searchBox.classList.remove('expanded');
-}
-if (searchToggle && searchBox) {
-  searchToggle.addEventListener('click', () => {
-    const willExpand = !searchBox.classList.contains('expanded');
-    searchBox.classList.toggle('expanded');
-    if (willExpand && searchInput) searchInput.focus();
-  });
+// 搜索框常驻标题栏，Ctrl+K 直接聚焦
+function focusSearch() {
+  if (searchInput) {
+    searchInput.focus();
+    searchInput.select();
+  }
 }
 
 filterTabs.addEventListener('click', (e) => {
@@ -715,8 +707,7 @@ document.addEventListener('keydown', (e) => {
 
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault();
-    expandSearch();
-    if (searchInput) searchInput.focus();
+    focusSearch();
   }
 
   if (e.key === 'Escape') {
@@ -725,7 +716,6 @@ document.addEventListener('keydown', (e) => {
       searchInput.value = '';
       searchQuery = '';
       render();
-      collapseSearch();
     } else if (window.wcopyAPI && window.wcopyAPI.closeWindow) {
       window.wcopyAPI.closeWindow();
     }
