@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::clipboard;
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipItem {
@@ -21,6 +23,11 @@ pub struct ClipItem {
     pub favorite: bool,
     pub pinned: bool,
     pub hash: String,
+    /// 缩略图（base64 PNG，最长边 ≤ 400px）。仅在 UI 列表里用作预览，
+    /// 避免前端把整屏截图按原分辨率解码进 DOM 导致内存暴涨。写回剪贴板
+    /// 时仍用 content.base64 里的原图，因此原图清晰度不丢失。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumb: Option<String>,
 }
 
 pub struct Store {
@@ -48,7 +55,7 @@ impl Store {
         }
     }
 
-    fn save(&self) {
+    pub(crate) fn save(&self) {
         if let Some(parent) = self.path.parent() {
             let _ = fs::create_dir_all(parent);
         }
@@ -72,6 +79,14 @@ impl Store {
     /// Adds an item. If the most recent item has the same hash, just refresh its time
     /// (so re-copying the same thing doesn't create a duplicate).
     pub fn add(&mut self, item: ClipItem) -> ClipItem {
+        // 图片项：顺手生成一张缩略图缓存，UI 列表只用缩略图，避免整屏截图
+        // 按原分辨率解码进 DOM（多张截图即可吃掉上百 MB 内存）。
+        let mut item = item;
+        if item.item_type == "image" {
+            if let Some(b64) = item.content.get("base64").and_then(|v| v.as_str()) {
+                item.thumb = clipboard::make_thumb(b64, 400);
+            }
+        }
         if let Some(last) = self.items.first() {
             if last.hash == item.hash {
                 let mut updated = last.clone();

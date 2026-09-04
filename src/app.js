@@ -207,7 +207,7 @@ function createCard(item, index) {
     const src = meta.base64 ? `data:image/png;base64,${meta.base64}` : '';
     previewBody = `
       <div class="card-preview image">
-        ${src ? `<img src="${src}" style="max-width:100%;max-height:140px;border-radius:6px;object-fit:contain;" alt="截图">` : `
+        ${src ? `<img src="${src}" loading="lazy" decoding="async" style="max-width:100%;max-height:140px;border-radius:6px;object-fit:contain;" alt="截图">` : `
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -848,8 +848,10 @@ if (isElectron && window.__TAURI__ && window.__TAURI__.window) {
   } catch (_) { /* 忽略 */ }
 }
 
-// 轮询兜底：每 600ms 拉取一次，保证实时性不依赖事件通道。
-setInterval(syncHistory, 600);
+// 轮询兜底：每 1500ms 拉取一次，保证实时性不依赖事件通道。
+// 实时性主要由主进程 history-updated 事件保证，轮询仅作兜底，降低频率可减少
+// 高频重建 DOM / 重新解码图片带来的内存与 CPU 波动。
+setInterval(syncHistory, 1500);
 
 // Init
 initTheme();

@@ -1,8 +1,10 @@
+use std::io::Cursor;
 use std::path::PathBuf;
 
 use arboard::{Clipboard, ImageData};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
+use image::imageops::FilterType;
 
 use crate::store::ClipItem;
 
@@ -94,6 +96,32 @@ pub fn png_to_image_data(bytes: &[u8]) -> Option<ImageData<'static>> {
         height: info.height as usize,
         bytes: std::borrow::Cow::Owned(rgba),
     })
+}
+
+/// Generate a downscaled PNG thumbnail (base64) of a full-resolution image,
+/// so the UI never has to decode multi-MB screenshots in the DOM.
+/// `max_edge` caps the longest side; aspect ratio is preserved.
+pub fn make_thumb(base64_full: &str, max_edge: u32) -> Option<String> {
+    let bytes = B64.decode(base64_full).ok()?;
+    let img = image::load_from_memory(&bytes).ok()?;
+    let (w, h) = (img.width(), img.height());
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let scale = (max_edge as f32 / w.max(h) as f32).min(1.0);
+    let (tw, th) = ((w as f32 * scale) as u32, (h as f32 * scale) as u32);
+    if tw == 0 || th == 0 {
+        return None;
+    }
+    let resized = img.resize(tw, th, FilterType::Triangle);
+    let mut buf = Vec::new();
+    {
+        let mut cur = Cursor::new(&mut buf);
+        resized
+            .write_to(&mut cur, image::ImageFormat::Png)
+            .ok()?;
+    }
+    Some(B64.encode(&buf))
 }
 
 /// Write a stored clip item back to the system clipboard.

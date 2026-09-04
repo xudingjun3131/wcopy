@@ -24,6 +24,7 @@ use tauri_plugin_global_shortcut::{
 };
 
 use crate::clipboard::RawClip;
+use crate::clipboard::make_thumb;
 use crate::settings::{Settings, WindowBounds};
 use crate::store::ClipItem;
 
@@ -292,9 +293,38 @@ fn toggle_popup(app: &tauri::AppHandle, state: &AppState) {
     }
 }
 
+/// 把存储项转成前端预览项：图片项用缩略图 base64 替换原图 base64，
+/// 避免前端把整屏截图按原分辨率解码进 DOM（多张即可吃掉上百 MB 内存）。
+/// 原图仍保留在存储中供写回剪贴板使用。
+fn to_front(items: &[ClipItem]) -> Vec<ClipItem> {
+    items
+        .iter()
+        .map(|it| {
+            if it.item_type == "image" {
+                let thumb = it.thumb.clone().or_else(|| {
+                    it.content
+                        .get("base64")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                });
+                if let Some(t) = thumb {
+                    let mut c = it.content.clone();
+                    if let Some(obj) = c.as_object_mut() {
+                        obj.insert("base64".into(), serde_json::Value::String(t));
+                    }
+                    let mut n = it.clone();
+                    n.content = c;
+                    return n;
+                }
+            }
+            it.clone()
+        })
+        .collect()
+}
+
 fn emit_history(app: &tauri::AppHandle, state: &AppState) {
     let items = state.store.lock().unwrap_or_else(|e| e.into_inner()).items.clone();
-    let _ = app.emit("history-updated", items);
+    let _ = app.emit("history-updated", to_front(&items));
 }
 
 fn capture_tick(app: &tauri::AppHandle) {
@@ -347,6 +377,7 @@ fn capture_tick(app: &tauri::AppHandle) {
         favorite: false,
         pinned: false,
         hash: hash.clone(),
+        thumb: None,
     };
     state.store.lock().unwrap_or_else(|e| e.into_inner()).add(item);
     *state.last_hash.lock().unwrap_or_else(|e| e.into_inner()) = hash;
@@ -512,7 +543,23 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 #[tauri::command]
 fn get_history(state: State<AppState>) -> Vec<ClipItem> {
-    state.store.lock().unwrap_or_else(|e| e.into_inner()).items.clone()
+    let mut store = state.store.lock().unwrap_or_else(|e| e.into_inner());
+    // 回填旧历史里缺失的缩略图（一次性），之后持久化，避免每次轮询重复解码。
+    let mut changed = false;
+    for it in store.items.iter_mut() {
+        if it.item_type == "image" && it.thumb.is_none() {
+            if let Some(b64) = it.content.get("base64").and_then(|v| v.as_str()) {
+                if let Some(t) = make_thumb(b64, 400) {
+                    it.thumb = Some(t);
+                    changed = true;
+                }
+            }
+        }
+    }
+    if changed {
+        store.save();
+    }
+    to_front(&store.items)
 }
 
 #[tauri::command]
