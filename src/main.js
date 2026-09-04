@@ -625,7 +625,12 @@ function Invoke-WcPaste([string]$hwndStr) {
   [W32]::AttachThreadInput($ft, $self, $true)
   $ok = [W32]::SetForegroundWindow($hwnd)
   [W32]::AttachThreadInput($ft, $self, $false)
-  Start-Sleep -Milliseconds 60
+  # 轮询等待前台窗口真正切到目标（多数情况 10~30ms），最多 150ms，命中即发键
+  $waited = 0
+  while (($waited -lt 15) -and ([W32]::GetForegroundWindow() -ne $hwnd)) {
+    Start-Sleep -Milliseconds 10
+    $waited++
+  }
   [W32]::keybd_event([byte]0x11, [byte]0, 0, [UIntPtr]::Zero)
   Start-Sleep -Milliseconds 20
   [W32]::keybd_event([byte]0x56, [byte]0, 0, [UIntPtr]::Zero)
@@ -636,7 +641,6 @@ function Invoke-WcPaste([string]$hwndStr) {
   Write-Output "pasted setfg=$ok"
 }
 function Invoke-WcCtlV {
-  Start-Sleep -Milliseconds 80
   [W32]::keybd_event([byte]0x11, [byte]0, 0, [UIntPtr]::Zero)
   Start-Sleep -Milliseconds 20
   [W32]::keybd_event([byte]0x56, [byte]0, 0, [UIntPtr]::Zero)
