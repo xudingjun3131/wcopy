@@ -125,10 +125,29 @@ fn classify(raw: &RawClip) -> (String, Value, Option<String>, i64) {
     (item_type.to_string(), Value::String(text), html, chars)
 }
 
+/// 从 settings 一次性读出停靠方向 + 用户拖动过的窗口尺寸（不持锁返回）。
+fn dock_params(state: &AppState) -> (String, Option<(i32, i32)>) {
+    let s = state.settings.lock().unwrap_or_else(|e| e.into_inner());
+    let pos = s.data.popup_position.clone();
+    let size = s
+        .data
+        .window_bounds
+        .as_ref()
+        .map(|b| (b.width, b.height));
+    (pos, size)
+}
+
 /// 将主窗口按 `pos`（left/right/top/bottom）停靠到当前屏幕工作区边缘。
 /// 只使用默认停靠尺寸，不依赖保存的 x/y，避免首次/后续打开位置不一致，
 /// 也避免在 set_settings 中调用时产生死锁（本函数不再访问 settings mutex）。
-fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str) {
+/// `saved_size`：用户手动调整过的窗口尺寸——上下贴边只采用其高度、
+/// 左右贴边只采用其宽度，另一维始终占满工作区以保证贴边效果。
+fn position_window(
+    app: &tauri::AppHandle,
+    win: &WebviewWindow,
+    pos: &str,
+    saved_size: Option<(i32, i32)>,
+) {
     let monitor = win
         .current_monitor()
         .or_else(|_| app.primary_monitor())
@@ -141,12 +160,19 @@ fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str) {
     const MIN_W: i32 = 420;
     const MIN_H: i32 = 360;
     const DEFAULT_DOCK_W: i32 = 460;
-    const DEFAULT_DOCK_H: i32 = 460;
+    const DEFAULT_DOCK_H: i32 = 640;
 
-    // 停靠面板的尺寸：左右贴边占满整高、默认宽度；上下贴边占满整宽、默认高度。
+    let saved = saved_size.filter(|(w, h)| *w >= MIN_W && *h >= MIN_H);
+    // 停靠面板的尺寸：上下贴边占满整宽 + 记住的高度；左右贴边记住的宽度 + 占满整高。
     let (mut w, mut h) = match pos {
-        "top" | "bottom" => (area.size.width as i32, DEFAULT_DOCK_H),
-        _ => (DEFAULT_DOCK_W, area.size.height as i32),
+        "top" | "bottom" => (
+            area.size.width as i32,
+            saved.map_or(DEFAULT_DOCK_H, |(_, h)| h),
+        ),
+        _ => (
+            saved.map_or(DEFAULT_DOCK_W, |(w, _)| w),
+            area.size.height as i32,
+        ),
     };
     w = w.max(MIN_W).min(area.size.width as i32);
     h = h.max(MIN_H).min(area.size.height as i32);
@@ -212,8 +238,8 @@ fn toggle_popup(app: &tauri::AppHandle, state: &AppState) {
         {
             *state.target_hwnd.lock().unwrap_or_else(|e| e.into_inner()) = win::get_foreground_window();
         }
-        let pos = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
-        position_window(app, &win, &pos);
+        let (pos, saved) = dock_params(state);
+        position_window(app, &win, &pos, saved);
         let _ = win.show();
         let _ = win.set_focus();
     }
@@ -403,8 +429,8 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 if let Some(w) = app.get_webview_window("main") {
-                    let pos = app.state::<AppState>().settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
-                    position_window(app, &w, &pos);
+                    let (pos, saved) = dock_params(&app.state::<AppState>());
+                    position_window(app, &w, &pos, saved);
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
@@ -424,8 +450,8 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 *last = now;
                 drop(last);
                 if let Some(w) = app.get_webview_window("main") {
-                    let pos = state.settings.lock().unwrap_or_else(|e| e.into_inner()).data.popup_position.clone();
-                    position_window(app, &w, &pos);
+                    let (pos, saved) = dock_params(&state);
+                    position_window(app, &w, &pos, saved);
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
@@ -564,7 +590,11 @@ fn set_settings(app: tauri::AppHandle, state: State<AppState>, patch: Value) -> 
     if position_changed {
         if let Some(win) = app.get_webview_window("main") {
             if win.is_visible().unwrap_or(false) {
-                position_window(&app, &win, &new_position);
+                let saved = data
+                    .window_bounds
+                    .as_ref()
+                    .map(|b| (b.width, b.height));
+                position_window(&app, &win, &new_position, saved);
             }
         }
     }

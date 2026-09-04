@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "wcopy",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "identifier": "com.itgank.wcopy",
   "build": {
     "beforeDevCommand": "node dev-server.mjs",
@@ -16,7 +16,7 @@
         "label": "main",
         "title": "wcopy",
         "width": 460,
-        "height": 760,
+        "height": 640,
         "minWidth": 420,
         "minHeight": 360,
         "decorations": false,

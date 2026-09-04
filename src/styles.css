@@ -117,8 +117,33 @@ body {
   color: var(--text-secondary);
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
+  top: 50%;
   pointer-events: none;
+}
+
+/* 设置面板头部的应用品牌标识（应用名从标题栏移到这里） */
+.settings-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-brand .brand-name {
+  color: var(--accent);
+}
+
+.settings-brand .logo-img {
+  background: var(--accent);
+  padding: 2px;
+  border-radius: 5px;
+}
+
+.settings-brand .brand-divider {
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
 .logo {
@@ -386,23 +411,26 @@ body {
   max-height: 100%;
 }
 
-/* 上下贴边时工具栏更紧凑，给卡片行留出高度 */
-[data-dock="top"] .toolbar,
-[data-dock="bottom"] .toolbar {
-  padding: 10px 16px 6px;
-  gap: 10px;
-}
-
-/* 单行模式下列表视图切换无意义，隐藏 */
-[data-dock="top"] .view-options,
-[data-dock="bottom"] .view-options {
+/* 左右贴边窗口较窄：隐藏计数与视图切换（窄列模式下无意义），
+   保证筛选 tab 与窗口按钮完整可见、可点击，不再被 overflow 裁掉 */
+[data-dock="left"] .title-count,
+[data-dock="right"] .title-count,
+[data-dock="left"] .view-options,
+[data-dock="right"] .view-options {
   display: none;
 }
 
-/* 左右贴边窗口较窄，隐藏居中标题避免与计数/按钮重叠 */
-[data-dock="left"] .titlebar-center,
-[data-dock="right"] .titlebar-center {
-  display: none;
+/* 左右贴边时筛选 tab 允许横向滚动，永远不会把右侧按钮挤出可视区 */
+[data-dock="left"] .filter-tabs,
+[data-dock="right"] .filter-tabs {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 上下贴边时标题栏更紧凑 */
+[data-dock="top"] .titlebar,
+[data-dock="bottom"] .titlebar {
+  padding: 0 12px;
 }
 
 /* Card */
