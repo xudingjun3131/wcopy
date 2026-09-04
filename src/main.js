@@ -1,5 +1,6 @@
 const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { exec, execFile, execFileSync } = require('child_process');
 const { ClipboardStore } = require('./store');
 const { SettingsStore } = require('./settings');
@@ -38,6 +39,18 @@ function warmupPowershell() {
   if (psWarmed || process.platform !== 'win32') return;
   psWarmed = true;
   execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', 'exit'], () => {});
+}
+
+// 粘贴诊断日志：写到 userData/paste-debug.log，便于定位“弹窗关了但没粘贴上”的真实原因
+function pasteLog(msg) {
+  try {
+    const file = path.join(app.getPath('userData'), 'paste-debug.log');
+    const line = `[${new Date().toISOString()}] ${msg}\n`;
+    let tooBig = false;
+    try { tooBig = fs.statSync(file).size > 300000; } catch (e) { /* 文件还不存在 */ }
+    if (tooBig) fs.writeFileSync(file, line);
+    else fs.appendFileSync(file, line);
+  } catch (e) { /* 日志失败不影响主流程 */ }
 }
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -521,26 +534,31 @@ public class W32 {
 }
 "@
 $hwnd = [IntPtr]::Parse("__HWND__")
+Write-Output "target=$hwnd"
 if ([W32]::IsIconic($hwnd)) { [W32]::ShowWindow($hwnd, 9) }   # SW_RESTORE
 $fore = [W32]::GetForegroundWindow()
-if ($fore -ne $hwnd) {
-  # 附着到当前前台线程以获取前台权限，否则 SetForegroundWindow 会被前台锁拒绝
-  $ft = [W32]::GetWindowThreadProcessId($fore, [ref][uint32]0)
-  $self = [W32]::GetCurrentThreadId()
-  [W32]::AttachThreadInput($ft, $self, $true)
-  [W32]::SetForegroundWindow($hwnd)
-  [W32]::AttachThreadInput($ft, $self, $false)
-} else {
-  [W32]::SetForegroundWindow($hwnd)
-}
-Start-Sleep -Milliseconds 100
-[W32]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 20
-[W32]::keybd_event(0x56, 0, 0, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 20
-[W32]::keybd_event(0x56, 0, 2, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 20
-[W32]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+Write-Output "fore_before=$fore"
+# 注意：out uint 参数必须传精确类型的变量，否则 P/Invoke 会抛异常导致后面全部不执行
+[uint32]$procId = 0
+$ft = [W32]::GetWindowThreadProcessId($fore, [ref]$procId)
+$self = [W32]::GetCurrentThreadId()
+# 附着到当前前台线程以获取前台权限，否则 SetForegroundWindow 会被前台锁拒绝
+[W32]::AttachThreadInput($ft, $self, $true)
+$ok = [W32]::SetForegroundWindow($hwnd)
+[W32]::AttachThreadInput($ft, $self, $false)
+Write-Output "setfg=$ok"
+Start-Sleep -Milliseconds 150
+$fore2 = [W32]::GetForegroundWindow()
+Write-Output "fore_after=$fore2 match=$($fore2 -eq $hwnd)"
+# Ctrl+V：keybd_event(VK_CONTROL=0x11, 'V'=0x56, KEYEVENTF_KEYUP=2)
+[W32]::keybd_event([byte]0x11, [byte]0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[W32]::keybd_event([byte]0x56, [byte]0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[W32]::keybd_event([byte]0x56, [byte]0, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[W32]::keybd_event([byte]0x11, [byte]0, 2, [UIntPtr]::Zero)
+Write-Output "sent=1"
 `;
 
 // 未记录到原应用句柄时的兜底：只发 Ctrl+V 给当前前台窗口
@@ -549,17 +567,21 @@ Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class W32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 }
 "@
-Start-Sleep -Milliseconds 80
-[W32]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 20
-[W32]::keybd_event(0x56, 0, 0, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 20
-[W32]::keybd_event(0x56, 0, 2, [UIntPtr]::Zero)
-Start-Sleep -Milliseconds 20
-[W32]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 120
+$fore = [W32]::GetForegroundWindow()
+Write-Output "fallback_fore=$fore"
+[W32]::keybd_event([byte]0x11, [byte]0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[W32]::keybd_event([byte]0x56, [byte]0, 0, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[W32]::keybd_event([byte]0x56, [byte]0, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 30
+[W32]::keybd_event([byte]0x11, [byte]0, 2, [UIntPtr]::Zero)
+Write-Output "fallback_sent=1"
 `;
 
 // 判断记录的句柄是否是 wcopy 自己的窗口（避免把焦点还给 wcopy 本身）
@@ -583,9 +605,14 @@ ipcMain.handle('paste-item', async (event, id) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
     const hwnd = (targetHwnd && targetHwnd !== '0' && !isSelfHwnd(targetHwnd)) ? targetHwnd : null;
     const ps = hwnd ? PASTE_PS_TEMPLATE.replace('__HWND__', hwnd) : PASTE_FALLBACK_PS;
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ps], (err) => {
-      if (err) console.error('paste-item paste failed:', err);
-    });
+    pasteLog(`paste start: hwnd=${hwnd || 'none(→fallback)'}`);
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ps],
+      { windowsHide: true, timeout: 8000 },
+      (err, stdout, stderr) => {
+        if (stdout) pasteLog(`out: ${String(stdout).trim().replace(/\s+/g, ' ')}`);
+        if (stderr) pasteLog(`stderr: ${String(stderr).trim().slice(0, 600)}`);
+        if (err) pasteLog(`fail: ${err.message}`);
+      });
   } else {
     // 非 Windows：写入剪贴板后仅复制，然后关闭弹窗
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
