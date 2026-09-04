@@ -101,11 +101,12 @@ jobs:
 
       - name: Remove stale installer assets
         if: success()
+        continue-on-error: true
         shell: bash
         run: |
           API="https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}"
           TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          ids=$(curl -s -H "Authorization: Bearer $TOKEN" "$API" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d);const ids=(j.assets||[]).filter(a=>/-setup\.exe$/.test(a.name)||/en-US\.msi$/.test(a.name)).map(a=>a.id);console.log(ids.join(' '))}catch(e){console.log('')}}))")
+          ids=$(curl -s -H "Authorization: Bearer $TOKEN" "$API" | python3 -c "import sys,json; d=json.load(sys.stdin); ids=[str(a['id']) for a in d.get('assets',[]) if a['name'].endswith('-setup.exe') or a['name'].endswith('en-US.msi')]; print(' '.join(ids))")
           for id in $ids; do
             echo "deleting stale asset $id"
             curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/assets/$id"
