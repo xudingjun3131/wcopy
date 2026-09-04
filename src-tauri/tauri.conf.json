@@ -42,7 +42,7 @@
     ],
     "windows": {
       "nsis": {
-        "install-mode": "perMachine"
+        "installMode": "perMachine"
       }
     }
   }
