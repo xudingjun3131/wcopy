@@ -1,70 +1,23 @@
 {
   "name": "wcopy",
-  "version": "1.0.21",
-  "description": "A Windows clipboard history manager inspired by iCopy",
-  "main": "src/main.js",
+  "version": "1.1.0",
+  "description": "轻量剪贴板历史管理器 (Tauri / Rust)",
+  "type": "module",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
   },
   "keywords": [
     "clipboard",
     "windows",
-    "electron",
+    "tauri",
+    "rust",
     "icopy"
   ],
-  "author": "wcopy team",
+  "author": "itgank",
   "license": "CC-BY-NC-4.0",
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^26.15.3"
-  },
-  "build": {
-    "appId": "com.wcopy.app",
-    "productName": "wcopy",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "src/**/*",
-      "assets/logo.png",
-      "assets/tray-icon.png",
-      "assets/icon-taskbar.png"
-    ],
-    "asar": true,
-    "compression": "maximum",
-    "npmRebuild": false,
-    "removePackageScripts": true,
-    "electronLanguages": [
-      "zh-CN",
-      "en-US"
-    ],
-    "win": {
-      "target": [
-        "nsis",
-        "msi"
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "deleteAppDataOnUninstall": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "wcopy",
-      "artifactName": "wcopy-setup-${version}.${ext}"
-    },
-    "msi": {
-      "oneClick": false,
-      "perMachine": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "wcopy",
-      "artifactName": "wcopy-${version}.${ext}"
-    }
+    "@tauri-apps/cli": "^2"
   }
 }

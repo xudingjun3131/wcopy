@@ -1,6 +1,6 @@
 name: Build Windows Installer
 
-# 只有打 tag（版本号，形如 v1.0.1）才会触发打包构建。
+# 只有打 tag（版本号，形如 v1.1.0）才会触发打包构建。
 # 普通 push 到 main 不再触发构建，避免无意义出包。
 on:
   push:
@@ -10,9 +10,12 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build-windows:
-    name: Build wcopy installer
+    name: Build wcopy installer (Tauri)
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -20,52 +23,60 @@ jobs:
         with:
           fetch-depth: 0
 
-      # tag 就是版本号：把 package.json 的 version 同步成 tag（去掉 v 前缀），
-      # 这样产物名 / GitHub Release 都跟 tag 一致。
+      # tag 就是版本号：把 Cargo.toml / package.json 的 version 同步成 tag（去掉 v 前缀）。
       - name: Apply version from tag
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Building version: $VERSION (from tag ${{ github.ref_name }})"
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          sed -i.bak -E "s/^version = \"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          node -e "const f='package.json';const p=require('./'+f);p.version='$VERSION';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install Tauri CLI
+        run: npm install
 
-      - name: Build NSIS installer (.exe)
+      - name: Build installers (NSIS + MSI)
         shell: bash
         run: |
           set -o pipefail
-          npx electron-builder --win --x64 --config.win.target=nsis --publish=never 2>&1 | tee nsis.log
+          npx tauri build 2>&1 | tee build.log
 
-      - name: Build MSI installer (.msi)
+      - name: List bundle output
+        if: success()
         shell: bash
         run: |
-          set -o pipefail
-          npx electron-builder --win --x64 --config.win.target=msi --publish=never 2>&1 | tee msi.log
+          echo "=== bundle dir ==="
+          ls -laR src-tauri/target/release/bundle 2>/dev/null || echo "no bundle dir"
 
-      - name: Stage notes with build logs
+      - name: Stage release notes
         if: success()
         shell: bash
         run: |
           {
             echo "# wcopy ${{ github.ref_name }}"
             echo
-            echo '## nsis.log (tail):'
-            tail -50 nsis.log 2>/dev/null || echo "none"
+            echo "Tauri / Rust 构建。安装包位于以下文件。"
             echo
-            echo '## msi.log (tail):'
-            tail -50 msi.log 2>/dev/null || echo "none"
+            echo '## build.log (tail):'
+            tail -40 build.log 2>/dev/null || echo "none"
             echo
-            echo '## dist exists?'
-            ls -la dist 2>&1 || echo "no dist"
+            echo '## bundle artifacts:'
+            ls -la src-tauri/target/release/bundle/nsis 2>/dev/null || true
+            ls -la src-tauri/target/release/bundle/wix 2>/dev/null || true
           } > release_notes.md
           cat release_notes.md
 
@@ -77,10 +88,9 @@ jobs:
           name: wcopy ${{ github.ref_name }}
           body_path: release_notes.md
           files: |
-            dist/wcopy-setup-*.exe
-            dist/wcopy-*.msi
-            dist/*.blockmap
-            dist/latest.yml
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/wix/*.msi
+            src-tauri/target/release/bundle/**/*.sig
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

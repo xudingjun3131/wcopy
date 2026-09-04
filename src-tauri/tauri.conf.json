@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "wcopy",
+  "version": "1.1.0",
+  "identifier": "com.itgank.wcopy",
+  "build": {
+    "beforeDevCommand": "node dev-server.mjs",
+    "devUrl": "http://localhost:1432",
+    "beforeBuildCommand": "node build.mjs",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "wcopy",
+        "width": 380,
+        "height": 640,
+        "minWidth": 320,
+        "minHeight": 200,
+        "decorations": false,
+        "transparent": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "resizable": true,
+        "center": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "install-mode": "perMachine"
+      }
+    }
+  }
+}
