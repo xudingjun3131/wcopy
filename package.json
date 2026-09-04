@@ -1,6 +1,6 @@
 {
   "name": "wcopy",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "A Windows clipboard history manager inspired by iCopy",
   "main": "src/main.js",
   "scripts": {
@@ -29,7 +29,17 @@
     },
     "files": [
       "src/**/*",
-      "assets/**/*"
+      "assets/logo.png",
+      "assets/tray-icon.png",
+      "assets/icon-taskbar.png"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "npmRebuild": false,
+    "removePackageScripts": true,
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
     ],
     "win": {
       "target": [

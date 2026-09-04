@@ -1,7 +1,7 @@
 const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { exec, execFile, execFileSync } = require('child_process');
+const { exec, execFile, execFileSync, spawn } = require('child_process');
 const { ClipboardStore } = require('./store');
 const { SettingsStore } = require('./settings');
 
@@ -519,20 +519,6 @@ ipcMain.handle('write-item', (event, id) => writeItemToClipboard(id));
 // 粘贴按键部分：用 keybd_event 直接发 Ctrl+V，比 SendKeys.SendWait 更底层、更可控。
 // VK_CONTROL=0x11, 'V'=0x56, KEYEVENTF_KEYUP=0x0002
 const PASTE_PS_TEMPLATE = `
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class W32 {
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
-  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
-  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-}
-"@
 $hwnd = [IntPtr]::Parse("__HWND__")
 Write-Output "target=$hwnd"
 if ([W32]::IsIconic($hwnd)) { [W32]::ShowWindow($hwnd, 9) }   # SW_RESTORE
@@ -563,14 +549,6 @@ Write-Output "sent=1"
 
 // 未记录到原应用句柄时的兜底：只发 Ctrl+V 给当前前台窗口
 const PASTE_FALLBACK_PS = `
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class W32 {
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-}
-"@
 Start-Sleep -Milliseconds 120
 $fore = [W32]::GetForegroundWindow()
 Write-Output "fallback_fore=$fore"
@@ -585,6 +563,158 @@ Write-Output "fallback_sent=1"
 `;
 
 // 判断记录的句柄是否是 wcopy 自己的窗口（避免把焦点还给 wcopy 本身）
+// ============ 粘贴提速：预编译 DLL + 常驻 PowerShell ============
+// 原实现每次粘贴都要新起 PowerShell 并现场 Add-Type 编译 C#（约 1~3 秒），等它执行时焦点早已变化，
+// 这就是“很难粘贴”的主因。改为：① 首次运行把 P/Invoke 代码编译成 DLL 永久复用；
+// ② 启动后常驻一个 PowerShell 预加载该 DLL，粘贴时只写一行命令，执行降到几十毫秒。
+const W32_CS = `
+using System;
+using System.Runtime.InteropServices;
+public class W32 {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+}
+`;
+
+let w32DllPath = null;
+let pasteSession = null;
+let pasteSessionReady = false;
+let pasteSessionStarting = false;
+
+function w32DllFilePath() {
+  return path.join(app.getPath('userData'), 'wcopy-w32.dll');
+}
+
+// 首次把 C# P/Invoke 编译成 DLL；已存在则直接复用
+function ensureW32Dll(cb) {
+  if (process.platform !== 'win32') return cb(null);
+  try {
+    const dll = w32DllFilePath();
+    if (fs.existsSync(dll)) { w32DllPath = dll; return cb(dll); }
+    const cmd = `Add-Type -TypeDefinition '${W32_CS}' -OutputAssembly '${dll}' -OutputType Library -Language CSharp`;
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', cmd],
+      { windowsHide: true, timeout: 60000 }, (err) => {
+        if (err) { pasteLog(`dll build failed: ${err.message}`); return cb(null); }
+        if (fs.existsSync(dll)) { w32DllPath = dll; pasteLog('dll ready'); return cb(dll); }
+        pasteLog('dll not produced');
+        cb(null);
+      });
+  } catch (e) {
+    pasteLog(`dll error: ${e.message}`);
+    cb(null);
+  }
+}
+
+// 常驻 PowerShell 的宿主脚本：预加载 DLL 并定义粘贴函数，然后从 stdin 逐行接收命令
+function pasteHostScript(dll) {
+  return `
+Add-Type -Path '${dll}'
+function Invoke-WcPaste([string]$hwndStr) {
+  $hwnd = [IntPtr]::Parse($hwndStr)
+  if ([W32]::IsIconic($hwnd)) { [W32]::ShowWindow($hwnd, 9) }
+  $fore = [W32]::GetForegroundWindow()
+  [uint32]$procId = 0
+  $ft = [W32]::GetWindowThreadProcessId($fore, [ref]$procId)
+  $self = [W32]::GetCurrentThreadId()
+  [W32]::AttachThreadInput($ft, $self, $true)
+  $ok = [W32]::SetForegroundWindow($hwnd)
+  [W32]::AttachThreadInput($ft, $self, $false)
+  Start-Sleep -Milliseconds 60
+  [W32]::keybd_event([byte]0x11, [byte]0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 20
+  [W32]::keybd_event([byte]0x56, [byte]0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 20
+  [W32]::keybd_event([byte]0x56, [byte]0, 2, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 20
+  [W32]::keybd_event([byte]0x11, [byte]0, 2, [UIntPtr]::Zero)
+  Write-Output "pasted setfg=$ok"
+}
+function Invoke-WcCtlV {
+  Start-Sleep -Milliseconds 80
+  [W32]::keybd_event([byte]0x11, [byte]0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 20
+  [W32]::keybd_event([byte]0x56, [byte]0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 20
+  [W32]::keybd_event([byte]0x56, [byte]0, 2, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 20
+  [W32]::keybd_event([byte]0x11, [byte]0, 2, [UIntPtr]::Zero)
+  Write-Output "ctlv sent"
+}
+Write-Output "READY"
+while ($null -ne ($line = [Console]::In.ReadLine())) {
+  if ([string]::IsNullOrWhiteSpace($line)) { continue }
+  try { Invoke-Expression $line } catch { Write-Output "ERR: $($_.Exception.Message)" }
+}
+`;
+}
+
+// 启动常驻 PowerShell（仅一次）；失败不影响功能，粘贴会自动走 execFile 回退
+function startPasteSession() {
+  if (process.platform !== 'win32' || pasteSession || pasteSessionStarting) return;
+  pasteSessionStarting = true;
+  ensureW32Dll((dll) => {
+    if (!dll) { pasteSessionStarting = false; pasteLog('paste session skipped (no dll)'); return; }
+    let hostPath = null;
+    try {
+      hostPath = path.join(app.getPath('userData'), 'wcopy-paste-host.ps1');
+      fs.writeFileSync(hostPath, pasteHostScript(dll), 'utf8');
+    } catch (e) {
+      pasteSessionStarting = false;
+      pasteLog(`write host failed: ${e.message}`);
+      return;
+    }
+    try {
+      pasteSession = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', hostPath],
+        { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      pasteSession.stdout.on('data', (d) => {
+        const s = String(d);
+        if (s.indexOf('READY') >= 0) pasteSessionReady = true;
+        const t = s.trim().replace(/\s+/g, ' ');
+        if (t && t.indexOf('READY') < 0) pasteLog(`ps: ${t.slice(0, 200)}`);
+      });
+      pasteSession.stderr.on('data', (d) => pasteLog(`ps-err: ${String(d).trim().slice(0, 300)}`));
+      pasteSession.on('exit', (code) => { pasteLog(`ps exit ${code}`); pasteSession = null; pasteSessionReady = false; });
+      pasteSession.on('error', (e) => { pasteLog(`ps error: ${e.message}`); pasteSession = null; pasteSessionReady = false; });
+      pasteLog('paste session starting');
+    } catch (e) {
+      pasteLog(`spawn failed: ${e.message}`);
+      pasteSession = null;
+    }
+    pasteSessionStarting = false;
+  });
+}
+
+// 优先走常驻进程（毫秒级）；返回 false 表示需要回退
+function sendPasteViaSession(cmdLine) {
+  if (!pasteSession || !pasteSessionReady) return false;
+  try {
+    pasteSession.stdin.write(cmdLine + '\n');
+    return true;
+  } catch (e) {
+    pasteLog(`session write failed: ${e.message}`);
+    return false;
+  }
+}
+
+// 回退：单次启动 PowerShell 执行（DLL 已就绪时只加载，不再现场编译）
+function sendPasteViaExec(psBody) {
+  const dll = w32DllPath && fs.existsSync(w32DllPath) ? w32DllPath : null;
+  const loader = dll ? `Add-Type -Path '${dll}'` : `Add-Type -TypeDefinition '${W32_CS}'`;
+  const ps = `${loader}\n${psBody}`;
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ps],
+    { windowsHide: true, timeout: 10000 }, (err, stdout, stderr) => {
+      if (stdout) pasteLog(`out: ${String(stdout).trim().replace(/\s+/g, ' ').slice(0, 300)}`);
+      if (stderr) pasteLog(`stderr: ${String(stderr).trim().slice(0, 400)}`);
+      if (err) pasteLog(`fail: ${err.message}`);
+    });
+}
+
 function isSelfHwnd(hwnd) {
   try {
     if (!mainWindow || mainWindow.isDestroyed()) return false;
@@ -604,15 +734,19 @@ ipcMain.handle('paste-item', async (event, id) => {
     // 先隐藏弹窗：焦点自然回退到原应用，避免 wcopy 抢焦点导致 Ctrl+V 发给自己
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
     const hwnd = (targetHwnd && targetHwnd !== '0' && !isSelfHwnd(targetHwnd)) ? targetHwnd : null;
-    const ps = hwnd ? PASTE_PS_TEMPLATE.replace('__HWND__', hwnd) : PASTE_FALLBACK_PS;
-    pasteLog(`paste start: hwnd=${hwnd || 'none(→fallback)'}`);
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', ps],
-      { windowsHide: true, timeout: 8000 },
-      (err, stdout, stderr) => {
-        if (stdout) pasteLog(`out: ${String(stdout).trim().replace(/\s+/g, ' ')}`);
-        if (stderr) pasteLog(`stderr: ${String(stderr).trim().slice(0, 600)}`);
-        if (err) pasteLog(`fail: ${err.message}`);
-      });
+    if (hwnd) {
+      // 优先复用常驻 PowerShell（几十毫秒）；未就绪才单次启动
+      pasteLog(`paste hwnd=${hwnd} via=${pasteSessionReady ? 'session' : 'exec'}`);
+      if (!sendPasteViaSession(`Invoke-WcPaste -hwndStr '${hwnd}'`)) {
+        sendPasteViaExec(PASTE_PS_TEMPLATE.replace('__HWND__', hwnd));
+      }
+    } else {
+      // 没记录到原应用句柄：只把 Ctrl+V 发给当前前台
+      pasteLog('paste no-hwnd: ctrl+v to foreground');
+      if (!sendPasteViaSession('Invoke-WcCtlV')) {
+        sendPasteViaExec(PASTE_FALLBACK_PS);
+      }
+    }
   } else {
     // 非 Windows：写入剪贴板后仅复制，然后关闭弹窗
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
@@ -662,6 +796,9 @@ app.whenReady().then(() => {
   createTray();
   registerShortcuts();
 
+  // 启动常驻 PowerShell（预编译 DLL + 预加载），让后续粘贴在几十毫秒内完成
+  startPasteSession();
+
   // Start clipboard watcher
   watcherId = setInterval(captureClipboard, 500);
 
@@ -679,6 +816,12 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (watcherId) clearInterval(watcherId);
+  // 结束常驻 PowerShell，避免残留进程
+  if (pasteSession) {
+    try { pasteSession.kill(); } catch (e) { /* ignore */ }
+    pasteSession = null;
+    pasteSessionReady = false;
+  }
 });
 
 app.on('before-quit', () => {
