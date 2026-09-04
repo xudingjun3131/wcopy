@@ -9,6 +9,11 @@ pub struct WindowBounds {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    /// 保存这组尺寸时的贴边方向（left/right/top/bottom）。
+    /// 切换方向后尺寸不再复用——上/下贴边的“整屏宽”、左/右贴边的“整屏高”
+    /// 不能被新方向误当成用户手动调整的值（否则切换方向会满屏展开）。
+    #[serde(default)]
+    pub dock: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
