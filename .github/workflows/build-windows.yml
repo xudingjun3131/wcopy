@@ -94,6 +94,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: wcopy ${{ github.ref_name }}
           body_path: release_notes.md
+          overwrite: true
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/wix/*.msi

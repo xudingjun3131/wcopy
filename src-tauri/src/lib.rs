@@ -128,9 +128,9 @@ fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str) {
         None => return,
     };
     let (w, h): (i32, i32) = match pos {
-        "left" | "right" => (380, area.size.height as i32),
-        "top" | "bottom" => (area.size.width as i32, 380),
-        _ => (380, area.size.height as i32),
+        "left" | "right" => (460, area.size.height as i32),
+        "top" | "bottom" => (area.size.width as i32, 460),
+        _ => (460, area.size.height as i32),
     };
     let (x, y): (i32, i32) = match pos {
         "left" => (area.position.x, area.position.y),
