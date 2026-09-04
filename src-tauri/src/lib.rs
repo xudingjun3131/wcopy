@@ -14,7 +14,7 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use tauri::{
-    Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, Window, WindowEvent,
+    Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, WindowEvent,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
@@ -35,6 +35,10 @@ pub struct AppState {
     pub capture_active: Mutex<bool>,
     /// 上次持久化窗口尺寸的时间戳（ms），用于节流写盘。
     pub last_bounds_save: Mutex<i64>,
+    /// 最近一次窗口尺寸（物理像素，来自 Resized 事件载荷）。
+    pub bounds_size: Mutex<Option<(i32, i32)>>,
+    /// 最近一次窗口位置（物理像素，来自 Moved 事件载荷）。
+    pub bounds_pos: Mutex<Option<(i32, i32)>>,
 }
 
 fn now_ms() -> i64 {
@@ -171,29 +175,43 @@ fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str, force
     let _ = win.set_position(PhysicalPosition::new(x, y));
 }
 
-/// 把当前窗口位置/尺寸（物理像素）写入 settings，并在拖动过程中做节流写盘。
-fn save_window_bounds(win: &Window, state: &AppState) {
-    let scale = win.scale_factor().unwrap_or(1.0);
-    let size = win.inner_size().unwrap_or_default();
-    let pos = win.inner_position().unwrap_or_default();
-    let w = (size.width as f64 * scale) as i32;
-    let h = (size.height as f64 * scale) as i32;
-    let x = (pos.x as f64 * scale) as i32;
-    let y = (pos.y as f64 * scale) as i32;
-    // 避免窗口尚未就绪时写入退化尺寸。
+/// 窗口尺寸/位置来自 on_window_event 的事件载荷（已是物理像素）。
+/// 切勿在事件回调里调用 win.inner_size()/inner_position()/scale_factor()——
+/// 这些会向事件循环发同步消息并等待回复，而回调本身就运行在事件循环线程上，
+/// 会导致整个应用死锁（表现为「点击就卡死」）。
+fn update_bounds_size(state: &AppState, w: i32, h: i32) {
     if w < 50 || h < 50 {
         return;
     }
-    {
-        let mut s = state.settings.lock().unwrap();
-        s.data.window_bounds = Some(WindowBounds { x, y, width: w, height: h });
-    }
+    *state.bounds_size.lock().unwrap() = Some((w, h));
+    maybe_save_bounds(state);
+}
+
+fn update_bounds_pos(state: &AppState, x: i32, y: i32) {
+    *state.bounds_pos.lock().unwrap() = Some((x, y));
+    maybe_save_bounds(state);
+}
+
+/// 合并最近一次尺寸与位置，节流（250ms）写盘；二者齐全才落库。
+fn maybe_save_bounds(state: &AppState) {
     let now = now_ms();
     let mut last = state.last_bounds_save.lock().unwrap();
-    if now - *last > 250 {
-        *last = now;
-        drop(last);
-        state.settings.lock().unwrap().save();
+    if now - *last <= 250 {
+        return;
+    }
+    *last = now;
+    drop(last);
+    let sz = *state.bounds_size.lock().unwrap();
+    let pz = *state.bounds_pos.lock().unwrap();
+    if let (Some((w, h)), Some((x, y))) = (sz, pz) {
+        if w >= 50 && h >= 50 {
+            {
+                let mut s = state.settings.lock().unwrap();
+                s.data.window_bounds = Some(WindowBounds { x, y, width: w, height: h });
+                s.data.bounds_schema = 1;
+            }
+            state.settings.lock().unwrap().save();
+        }
     }
 }
 
@@ -605,6 +623,8 @@ pub fn run() {
                 last_hash: Mutex::new(String::new()),
                 capture_active: Mutex::new(false),
                 last_bounds_save: Mutex::new(0),
+                bounds_size: Mutex::new(None),
+                bounds_pos: Mutex::new(None),
             });
             register_popup_shortcut(&app.handle());
             build_tray(app)?;
@@ -646,9 +666,13 @@ pub fn run() {
                     let state = window.state::<AppState>();
                     state.settings.lock().unwrap().save();
                 }
-                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                WindowEvent::Resized(size) => {
                     let state = window.state::<AppState>();
-                    save_window_bounds(window, state.inner());
+                    update_bounds_size(state.inner(), size.width as i32, size.height as i32);
+                }
+                WindowEvent::Moved(pos) => {
+                    let state = window.state::<AppState>();
+                    update_bounds_pos(state.inner(), pos.x, pos.y);
                 }
                 _ => {}
             }
