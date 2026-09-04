@@ -14,7 +14,7 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use tauri::{
-    Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, WindowEvent,
+    Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow, Window, WindowEvent,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
@@ -24,7 +24,7 @@ use tauri_plugin_global_shortcut::{
 };
 
 use crate::clipboard::RawClip;
-use crate::settings::Settings;
+use crate::settings::{Settings, WindowBounds};
 use crate::store::ClipItem;
 
 pub struct AppState {
@@ -33,6 +33,8 @@ pub struct AppState {
     pub target_hwnd: Mutex<isize>,
     pub last_hash: Mutex<String>,
     pub capture_active: Mutex<bool>,
+    /// 上次持久化窗口尺寸的时间戳（ms），用于节流写盘。
+    pub last_bounds_save: Mutex<i64>,
 }
 
 fn now_ms() -> i64 {
@@ -117,7 +119,7 @@ fn classify(raw: &RawClip) -> (String, Value, Option<String>, i64) {
     (item_type.to_string(), Value::String(text), html, chars)
 }
 
-fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str) {
+fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str, force_dock: bool) {
     let monitor = win
         .current_monitor()
         .or_else(|_| app.primary_monitor())
@@ -127,20 +129,72 @@ fn position_window(app: &tauri::AppHandle, win: &WebviewWindow, pos: &str) {
         Some(m) => m.work_area(),
         None => return,
     };
-    let (w, h): (i32, i32) = match pos {
-        "left" | "right" => (460, area.size.height as i32),
+    let state = app.state::<AppState>();
+    let saved: Option<WindowBounds> = state.settings.lock().unwrap().data.window_bounds.clone();
+    const MIN_W: i32 = 420;
+    const MIN_H: i32 = 360;
+
+    // 尺寸：有保存过则用保存的尺寸（夹紧到合法范围与屏幕内），否则按靠边停靠默认尺寸。
+    let (mut w, mut h): (i32, i32) = match pos {
         "top" | "bottom" => (area.size.width as i32, 460),
         _ => (460, area.size.height as i32),
     };
-    let (x, y): (i32, i32) = match pos {
-        "left" => (area.position.x, area.position.y),
-        "right" => (area.position.x + area.size.width as i32 - w, area.position.y),
-        "top" => (area.position.x, area.position.y),
-        "bottom" => (area.position.x, area.position.y + area.size.height as i32 - h),
-        _ => (area.position.x + area.size.width as i32 - w, area.position.y),
+    if let Some(b) = &saved {
+        w = b.width.max(MIN_W).min(area.size.width as i32);
+        h = b.height.max(MIN_H).min(area.size.height as i32);
+    }
+
+    // 位置：未强制停靠且保存的位置仍落在当前屏幕工作区内 -> 用保存的位置；
+    // 否则按 popup_position 重新靠边停靠。
+    let (x, y): (i32, i32) = {
+        let use_saved = !force_dock
+            && saved.as_ref().map_or(false, |b| {
+                b.x >= area.position.x
+                    && b.x + w <= area.position.x + area.size.width as i32
+                    && b.y >= area.position.y
+                    && b.y + h <= area.position.y + area.size.height as i32
+            });
+        if use_saved {
+            let b = saved.as_ref().unwrap();
+            (b.x, b.y)
+        } else {
+            match pos {
+                "left" => (area.position.x, area.position.y),
+                "right" => (area.position.x + area.size.width as i32 - w, area.position.y),
+                "top" => (area.position.x, area.position.y),
+                "bottom" => (area.position.x, area.position.y + area.size.height as i32 - h),
+                _ => (area.position.x + area.size.width as i32 - w, area.position.y),
+            }
+        }
     };
     let _ = win.set_size(PhysicalSize::new(w as u32, h as u32));
     let _ = win.set_position(PhysicalPosition::new(x, y));
+}
+
+/// 把当前窗口位置/尺寸（物理像素）写入 settings，并在拖动过程中做节流写盘。
+fn save_window_bounds(win: &Window, state: &AppState) {
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let size = win.inner_size().unwrap_or_default();
+    let pos = win.inner_position().unwrap_or_default();
+    let w = (size.width as f64 * scale) as i32;
+    let h = (size.height as f64 * scale) as i32;
+    let x = (pos.x as f64 * scale) as i32;
+    let y = (pos.y as f64 * scale) as i32;
+    // 避免窗口尚未就绪时写入退化尺寸。
+    if w < 50 || h < 50 {
+        return;
+    }
+    {
+        let mut s = state.settings.lock().unwrap();
+        s.data.window_bounds = Some(WindowBounds { x, y, width: w, height: h });
+    }
+    let now = now_ms();
+    let mut last = state.last_bounds_save.lock().unwrap();
+    if now - *last > 250 {
+        *last = now;
+        drop(last);
+        state.settings.lock().unwrap().save();
+    }
 }
 
 fn toggle_popup(app: &tauri::AppHandle, state: &AppState) {
@@ -154,7 +208,7 @@ fn toggle_popup(app: &tauri::AppHandle, state: &AppState) {
             *state.target_hwnd.lock().unwrap() = win::get_foreground_window();
         }
         let pos = state.settings.lock().unwrap().data.popup_position.clone();
-        position_window(app, &win, &pos);
+        position_window(app, &win, &pos, false);
         let _ = win.show();
     }
 }
@@ -343,6 +397,8 @@ fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 if let Some(w) = app.get_webview_window("main") {
+                    let pos = app.state::<AppState>().settings.lock().unwrap().data.popup_position.clone();
+                    position_window(app, &w, &pos, false);
                     let _ = w.show();
                     let _ = w.set_focus();
                 }
@@ -471,7 +527,7 @@ fn set_settings(app: tauri::AppHandle, state: State<AppState>, patch: Value) -> 
     if patch.get("popupPosition").is_some() {
         if let Some(win) = app.get_webview_window("main") {
             if win.is_visible().unwrap_or(false) {
-                position_window(&app, &win, &s.data.popup_position);
+                position_window(&app, &win, &s.data.popup_position, true);
             }
         }
     }
@@ -548,6 +604,7 @@ pub fn run() {
                 target_hwnd: Mutex::new(0),
                 last_hash: Mutex::new(String::new()),
                 capture_active: Mutex::new(false),
+                last_bounds_save: Mutex::new(0),
             });
             register_popup_shortcut(&app.handle());
             build_tray(app)?;
@@ -581,9 +638,19 @@ pub fn run() {
             minimize_window
         ])
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    // 关闭前确保最新尺寸已落盘。
+                    let state = window.state::<AppState>();
+                    state.settings.lock().unwrap().save();
+                }
+                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                    let state = window.state::<AppState>();
+                    save_window_bounds(window, state.inner());
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())

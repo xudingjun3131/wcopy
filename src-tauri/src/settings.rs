@@ -2,6 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -11,6 +20,9 @@ pub struct Settings {
     pub clear_retains_favorites: bool,
     pub popup_position: String,
     pub popup_shortcut: String,
+    /// 上一次窗口位置/尺寸（物理像素）。None 表示尚未保存过，按靠边停靠默认尺寸处理。
+    #[serde(default)]
+    pub window_bounds: Option<WindowBounds>,
 }
 
 impl Default for Settings {
@@ -22,6 +34,7 @@ impl Default for Settings {
             clear_retains_favorites: true,
             popup_position: "right".to_string(),
             popup_shortcut: "Ctrl+Shift+V".to_string(),
+            window_bounds: None,
         }
     }
 }
